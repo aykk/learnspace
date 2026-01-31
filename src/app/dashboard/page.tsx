@@ -23,8 +23,10 @@ export default function Dashboard() {
   const [newUrl, setNewUrl] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
 
   const fetchBookmarks = async () => {
+    setLoading(true);
     try {
       const res = await fetch('/api/bookmarks');
       const data = await res.json();
@@ -47,6 +49,7 @@ export default function Dashboard() {
     if (!newUrl.trim()) return;
 
     setAdding(true);
+    setAddError('');
     try {
       const res = await fetch('/api/bookmarks', {
         method: 'POST',
@@ -58,13 +61,17 @@ export default function Dashboard() {
         }),
       });
 
+      const data = await res.json();
       if (res.ok) {
         setNewUrl('');
         setNewTitle('');
         fetchBookmarks();
+      } else {
+        setAddError(data.error || 'Failed to add bookmark');
       }
     } catch (error) {
       console.error('Failed to add bookmark:', error);
+      setAddError('Network error. Is the dev server running?');
     } finally {
       setAdding(false);
     }
@@ -83,6 +90,20 @@ export default function Dashboard() {
     }
   };
 
+  const [clearing, setClearing] = useState(false);
+  const handleClearAll = async () => {
+    if (!confirm('Clear all bookmarks? This cannot be undone.')) return;
+    setClearing(true);
+    try {
+      await fetch('/api/bookmarks/clear', { method: 'DELETE' });
+      fetchBookmarks();
+    } catch (error) {
+      console.error('Failed to clear bookmarks:', error);
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const generatePodcast = () => {
     setGenerating(true);
     setPodcastStatus('Starting…');
@@ -91,13 +112,13 @@ export default function Dashboard() {
 
     const es = new EventSource('/api/podcast/generate');
 
-    es.addEventListener('status', (e) => {
+    es.addEventListener('status', (e: MessageEvent) => {
       const data = JSON.parse(e.data);
       setPodcastStatus(data.msg);
       setPodcastError(false);
     });
 
-    es.addEventListener('done', (e) => {
+    es.addEventListener('done', (e: MessageEvent) => {
       const data = JSON.parse(e.data);
       es.close();
       if (data.url) {
@@ -109,10 +130,10 @@ export default function Dashboard() {
       setGenerating(false);
     });
 
-    es.addEventListener('error', (e) => {
+    es.addEventListener('error', (e: Event) => {
       es.close();
       try {
-        const data = JSON.parse(e.data);
+        const data = JSON.parse((e as MessageEvent).data);
         setPodcastStatus(data.error || 'Unknown error');
       } catch {
         setPodcastStatus('Connection lost or server error.');
@@ -146,12 +167,21 @@ export default function Dashboard() {
 
       <main className="max-w-5xl mx-auto px-6 py-8">
         {/* Status Card */}
-        <div className="bg-[#29b5e8]/10 border-l-4 border-[#29b5e8] rounded-r-lg p-4 mb-8">
-          <p className="font-semibold text-[#29b5e8]">Table: LEARNSPACE_BOOKMARKS</p>
-          <p className="text-white/60 text-sm mt-1">
-            Database: <code className="bg-white/10 px-2 py-0.5 rounded">learnspace.db</code> — 
-            Add bookmarks below or use the Chrome extension.
-          </p>
+        <div className="bg-[#29b5e8]/10 border-l-4 border-[#29b5e8] rounded-r-lg p-4 mb-8 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <p className="font-semibold text-[#29b5e8]">Table: LEARNSPACE_BOOKMARKS</p>
+            <p className="text-white/60 text-sm mt-1">
+              Database: <code className="bg-white/10 px-2 py-0.5 rounded">learnspace.db</code> — 
+              Add bookmarks below or use the Chrome extension.
+            </p>
+          </div>
+          <button
+            onClick={() => fetchBookmarks()}
+            disabled={loading}
+            className="text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
         </div>
 
         {/* Add Bookmark Form */}
@@ -181,14 +211,24 @@ export default function Dashboard() {
               {adding ? 'Adding…' : 'Add'}
             </button>
           </form>
+          {addError && (
+            <p className="mt-2 text-sm text-red-400">{addError}</p>
+          )}
         </div>
 
         {/* Bookmarks Table */}
         <div className="bg-[#16162a] rounded-xl border border-white/10 overflow-hidden mb-8">
-          <div className="px-6 py-4 border-b border-white/10">
+          <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-lg font-semibold">
               SELECT * FROM LEARNSPACE_BOOKMARKS ({bookmarks.length} rows)
             </h2>
+            <button
+              onClick={handleClearAll}
+              disabled={clearing || bookmarks.length === 0}
+              className="text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {clearing ? 'Clearing…' : 'Clear all bookmarks'}
+            </button>
           </div>
           
           {loading ? (

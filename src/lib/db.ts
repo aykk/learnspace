@@ -19,8 +19,8 @@ async function getDb(): Promise<Database> {
   if (db) return db;
 
   // Load WASM binary directly for server-side usage
-  const wasmBinary = fs.readFileSync(WASM_PATH);
-  const SQL = await initSqlJs({ wasmBinary });
+  const wasmBuffer = fs.readFileSync(WASM_PATH);
+  const SQL = await initSqlJs({ wasmBinary: wasmBuffer as unknown as ArrayBuffer });
   
   // Try to load existing database
   if (fs.existsSync(DB_PATH)) {
@@ -104,4 +104,12 @@ export async function deleteBookmark(url: string): Promise<number> {
   const changes = database.getRowsModified();
   saveDb();
   return changes;
+}
+
+export async function clearAllBookmarks(): Promise<number> {
+  const database = await getDb();
+  const before = database.exec('SELECT COUNT(*) as count FROM LEARNSPACE_BOOKMARKS')[0]?.values[0]?.[0] as number ?? 0;
+  database.run('DELETE FROM LEARNSPACE_BOOKMARKS');
+  saveDb();
+  return before;
 }

@@ -1,6 +1,5 @@
-// Configure your endpoint here
-// Mock Snowflake — run: cd mock-snowflake && npm install && npm start
-const WEBAPP_URL = 'http://localhost:3457/api/bookmarks';
+// Configure your endpoint here — Next.js app (npm run dev)
+const WEBAPP_URL = 'http://localhost:3000/api/bookmarks';
 
 const LEARNSPACE_FOLDER_NAME = 'learnspace';
 
