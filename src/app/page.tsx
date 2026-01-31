@@ -84,7 +84,7 @@ export default function Home() {
           <nav className="absolute bottom-0 left-1/2 z-30 font-[family-name:var(--font-body)]">
             {/* 10 o'clock - Home */}
             <a 
-              href="#"
+              href="/dashboard"
               className="absolute text-neutral-900/80 text-base md:text-lg font-light tracking-wide hover:text-neutral-900 transition-colors whitespace-nowrap"
               style={{
                 transform: "translateX(-50%) rotate(-55deg) translateY(-60vh) rotate(55deg)",
