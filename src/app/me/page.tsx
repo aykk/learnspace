@@ -178,10 +178,14 @@ export default function Dashboard() {
   const [selectedJargon, setSelectedJargon] = useState<string | null>(null);
   const [jargonDefinition, setJargonDefinition] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [addLinkOpen, setAddLinkOpen] = useState(false);
+  const [editLinksOpen, setEditLinksOpen] = useState(false);
   const [addLinkUrl, setAddLinkUrl] = useState('');
   const [addLinkAdding, setAddLinkAdding] = useState(false);
   const [addLinkMessage, setAddLinkMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [bookmarks, setBookmarks] = useState<{ ID: number; URL: string; TITLE: string | null }[]>([]);
+  const [bookmarksLoading, setBookmarksLoading] = useState(false);
+  const [removingUrl, setRemovingUrl] = useState<string | null>(null);
+  const [totalBookmarkCount, setTotalBookmarkCount] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const clusterRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -422,6 +426,17 @@ export default function Dashboard() {
       
       if (!Array.isArray(backendClusters) || backendClusters.length === 0) {
         setClusters([]);
+        try {
+          const bRes = await fetch('/api/bookmarks');
+          if (bRes.ok) {
+            const d = await bRes.json();
+            setTotalBookmarkCount(Array.isArray(d) ? d.length : 0);
+          } else {
+            setTotalBookmarkCount(0);
+          }
+        } catch {
+          setTotalBookmarkCount(0);
+        }
         return;
       }
       
@@ -558,8 +573,19 @@ export default function Dashboard() {
           });
         } catch { /* ignore */ }
       }
-      
+
       setClusters(withPersistedFlashcards);
+
+      // Total link count from Snowflake (number of bookmarks in DB)
+      try {
+        const bookmarksRes = await fetch('/api/bookmarks');
+        if (bookmarksRes.ok) {
+          const bookmarksData = await bookmarksRes.json();
+          setTotalBookmarkCount(Array.isArray(bookmarksData) ? bookmarksData.length : 0);
+        }
+      } catch {
+        /* keep previous totalBookmarkCount on error */
+      }
     } catch (error) {
       console.error('Error loading clusters:', error);
     }
@@ -641,12 +667,50 @@ export default function Dashboard() {
       }
       setAddLinkMessage({ type: 'success', text: 'Added!' });
       setAddLinkUrl('');
+      setTotalBookmarkCount((prev) => prev + 1);
+      await fetchBookmarks();
     } catch (err) {
       setAddLinkMessage({ type: 'error', text: (err as Error).message || 'Failed to add' });
     } finally {
       setAddLinkAdding(false);
     }
   };
+
+  // Fetch all bookmarks for the links window
+  const fetchBookmarks = useCallback(async () => {
+    setBookmarksLoading(true);
+    try {
+      const res = await fetch('/api/bookmarks');
+      if (!res.ok) throw new Error('Failed to fetch links');
+      const data = await res.json();
+      setBookmarks(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Fetch bookmarks error:', err);
+      setBookmarks([]);
+    } finally {
+      setBookmarksLoading(false);
+    }
+  }, []);
+
+  // Remove a link (same as dashboard delete bookmark)
+  const handleRemoveLink = useCallback(async (url: string) => {
+    setRemovingUrl(url);
+    try {
+      const res = await fetch('/api/bookmarks', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) throw new Error('Failed to remove link');
+      await fetchBookmarks();
+      await loadClusters();
+    } catch (err) {
+      console.error('Remove link error:', err);
+      alert((err as Error).message || 'Failed to remove link');
+    } finally {
+      setRemovingUrl(null);
+    }
+  }, [fetchBookmarks, loadClusters]);
 
   // Generate content for a cluster based on user preferences
   const handleGenerateContent = async (clusterId: string) => {
@@ -949,7 +1013,6 @@ export default function Dashboard() {
 
   // Filter clusters based on hidden status
   const visibleClusters = showHidden ? clusters : clusters.filter(c => !c.isHidden);
-  const totalLinks = clusters.reduce((acc, c) => acc + c.links.length, 0);
 
   // Show loading state while checking preferences
   if (!preferencesChecked) {
@@ -992,7 +1055,7 @@ export default function Dashboard() {
             My Learnspace<span style={{ color: "#e07850" }}>.</span>
           </h1>
           <p className="text-neutral-500 text-sm font-[family-name:var(--font-body)] mt-1">
-            {clusters.length} clusters • {totalLinks} total links
+            {clusters.length} clusters • {totalBookmarkCount} total links
           </p>
         </div>
 
@@ -1112,12 +1175,15 @@ export default function Dashboard() {
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           
-          {/* Add Link Button */}
+          {/* Edit Links - one button opens add + remove in one popup */}
           <button
-            onClick={() => setAddLinkOpen(true)}
+            onClick={() => {
+              setEditLinksOpen(true);
+              fetchBookmarks();
+            }}
             className="w-full px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 font-[family-name:var(--font-body)] transition-colors duration-200 flex items-center justify-center gap-2 bg-white/30 hover:bg-white/50 rounded-sm"
           >
-            <span className="text-lg">+</span> Add Link
+            Edit Links
           </button>
           
           {/* Back Home Button - Gray with white text */}
@@ -1149,26 +1215,26 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Add Link Modal - same behavior as extension "Add link manually" */}
-      {addLinkOpen && (
+      {/* Edit Links - one popup: add link manually + list with remove */}
+      {editLinksOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] px-4"
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 pb-8"
           role="dialog"
-          aria-label="Add link"
+          aria-label="Edit links"
         >
           <div
             className="absolute inset-0 bg-black/30"
             onClick={() => {
-              setAddLinkOpen(false);
+              setEditLinksOpen(false);
               setAddLinkMessage(null);
             }}
           />
-          <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-md rounded-sm shadow-lg border border-neutral-200 p-4 font-[family-name:var(--font-body)]">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-semibold text-neutral-900">Add link</h3>
+          <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-white/95 backdrop-blur-md rounded-sm shadow-lg border border-neutral-200 font-[family-name:var(--font-body)]">
+            <div className="flex justify-between items-center p-4 border-b border-neutral-200 flex-shrink-0">
+              <h3 className="text-sm font-semibold text-neutral-900">Edit links</h3>
               <button
                 onClick={() => {
-                  setAddLinkOpen(false);
+                  setEditLinksOpen(false);
                   setAddLinkMessage(null);
                 }}
                 className="text-neutral-500 hover:text-neutral-900 p-1"
@@ -1177,35 +1243,81 @@ export default function Dashboard() {
                 ✕
               </button>
             </div>
-            <input
-              type="url"
-              value={addLinkUrl}
-              onChange={(e) => setAddLinkUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddLink();
-              }}
-              placeholder="Paste a link"
-              className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-sm bg-white/80 text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-[#e07850]/50 focus:border-[#e07850]"
-              autoFocus
-            />
-            <button
-              type="button"
-              onClick={handleAddLink}
-              disabled={addLinkAdding}
-              className="w-full mt-3 px-4 py-2 text-sm font-medium text-white uppercase tracking-wider rounded-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ backgroundColor: '#e07850' }}
-            >
-              {addLinkAdding ? 'Adding...' : 'Add'}
-            </button>
-            {addLinkMessage && (
-              <p
-                className={`mt-2 text-xs font-medium ${
-                  addLinkMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
-                }`}
-              >
-                {addLinkMessage.text}
-              </p>
-            )}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6">
+              {/* Add link manually */}
+              <div>
+                <p className="text-xs font-medium text-neutral-600 mb-2">Add link manually</p>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={addLinkUrl}
+                    onChange={(e) => setAddLinkUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddLink();
+                    }}
+                    placeholder="Paste a link"
+                    className="flex-1 px-3 py-2 text-sm border border-neutral-300 rounded-sm bg-white text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-[#e07850]/50 focus:border-[#e07850]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddLink}
+                    disabled={addLinkAdding}
+                    className="px-4 py-2 text-sm font-medium text-white uppercase tracking-wider rounded-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+                    style={{ backgroundColor: '#e07850' }}
+                  >
+                    {addLinkAdding ? 'Adding...' : 'Add'}
+                  </button>
+                </div>
+                {addLinkMessage && (
+                  <p
+                    className={`mt-1.5 text-xs font-medium ${
+                      addLinkMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {addLinkMessage.text}
+                  </p>
+                )}
+              </div>
+
+              {/* Your links - remove */}
+              <div>
+                <p className="text-xs font-medium text-neutral-600 mb-2">Your links</p>
+                {bookmarksLoading ? (
+                  <p className="text-sm text-neutral-500">Loading links...</p>
+                ) : bookmarks.length === 0 ? (
+                  <p className="text-sm text-neutral-500">No links yet. Add one above.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {bookmarks.map((b) => (
+                      <li
+                        key={b.ID}
+                        className="flex items-center gap-3 py-2 px-3 rounded-sm border border-neutral-100 hover:bg-neutral-50/80"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-neutral-900 truncate">{b.TITLE || b.URL}</p>
+                          <a
+                            href={b.URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-[#e07850] hover:underline truncate block"
+                          >
+                            {b.URL}
+                          </a>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLink(b.URL)}
+                          disabled={removingUrl === b.URL}
+                          className="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-sm border border-red-400 text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-500 focus:ring-2 focus:ring-red-300 focus:border-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {removingUrl === b.URL ? 'Removing...' : 'Remove'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1265,7 +1377,7 @@ export default function Dashboard() {
               </div>
               <div className="pt-2 border-t border-neutral-200">
                 <p><strong className="text-neutral-900">Refresh</strong> — Syncs new bookmarks from your &quot;Learnspace&quot; Chrome bookmark folder and creates new clusters.</p>
-                <p className="mt-2"><strong className="text-neutral-900">Add Link</strong> — Manually add any URL to your Learnspace.</p>
+                <p className="mt-2"><strong className="text-neutral-900">Edit Links</strong> — Add links manually or remove links from your Learnspace.</p>
               </div>
             </div>
           </div>
