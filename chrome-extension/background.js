@@ -37,6 +37,7 @@ async function sendToWebapp(bookmark) {
   if (!bookmark.url) return;
 
   try {
+    console.log('Learnspace: Sending bookmark to API:', bookmark.url);
     const response = await fetch(WEBAPP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -48,10 +49,15 @@ async function sendToWebapp(bookmark) {
     });
 
     if (!response.ok) {
-      console.error('Learnspace: Failed to send bookmark', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('Learnspace: Failed to send bookmark', response.status, errorText);
+      return false;
     }
+    console.log('Learnspace: Successfully sent bookmark:', bookmark.url);
+    return true;
   } catch (err) {
     console.error('Learnspace: Error sending to webapp', err);
+    return false;
   }
 }
 
@@ -82,22 +88,35 @@ async function onBookmarkCreated(id, bookmark) {
   if (!node || !node.url) return; // Skip folders
 
   const learnspaceId = await getLearnspaceFolderId();
-  if (!learnspaceId || node.parentId !== learnspaceId) return;
+  if (!learnspaceId) {
+    console.log('Learnspace: No learnspace folder found when bookmark created');
+    return;
+  }
+  
+  if (node.parentId !== learnspaceId) {
+    console.log('Learnspace: Bookmark created but not in learnspace folder', node.parentId, learnspaceId);
+    return;
+  }
 
+  console.log('Learnspace: New bookmark detected in learnspace folder:', node.url);
   await sendToWebapp(node);
 }
 
 // Handle bookmark moved (drag into or out of learnspace)
 async function onBookmarkMoved(id, moveInfo) {
   const learnspaceId = await getLearnspaceFolderId();
+  if (!learnspaceId) return;
+  
   const movedInto = moveInfo.parentId === learnspaceId;
   const movedOutOf = moveInfo.oldParentId === learnspaceId;
 
   if (movedInto) {
+    console.log('Learnspace: Bookmark moved into learnspace folder');
     const nodes = await chrome.bookmarks.get(id);
     const node = nodes[0];
     if (node?.url) await sendToWebapp(node);
   } else if (movedOutOf) {
+    console.log('Learnspace: Bookmark moved out of learnspace folder');
     const nodes = await chrome.bookmarks.get(id);
     const node = nodes[0];
     if (node?.url) await removeFromWebapp(node.url);
@@ -115,14 +134,20 @@ function onBookmarkRemoved(id, removeInfo) {
   }
 }
 
-// Install: create folder
+// Install: create folder and sync existing bookmarks
 chrome.runtime.onInstalled.addListener(() => {
-  ensureLearnspaceFolder();
+  ensureLearnspaceFolder().then(() => {
+    // Sync existing bookmarks on install
+    setTimeout(() => syncAllBookmarksToApi(), 1000);
+  });
 });
 
-// Startup: ensure folder exists
+// Startup: ensure folder exists and sync existing bookmarks
 chrome.runtime.onStartup.addListener(() => {
-  ensureLearnspaceFolder();
+  ensureLearnspaceFolder().then(() => {
+    // Sync existing bookmarks on startup
+    setTimeout(() => syncAllBookmarksToApi(), 1000);
+  });
 });
 
 // Sync Chrome bookmarks to match API (remove from Chrome any deleted on dashboard)
@@ -147,10 +172,49 @@ async function syncChromeToApi(apiUrl) {
   }
 }
 
+// Sync all bookmarks from learnspace folder to API (for existing bookmarks)
+async function syncAllBookmarksToApi() {
+  const folderId = await getLearnspaceFolderId();
+  if (!folderId) {
+    console.log('Learnspace: No learnspace folder found');
+    return { success: 0, failed: 0 };
+  }
+
+  try {
+    console.log('Learnspace: Starting sync of all bookmarks from folder...');
+    const children = await chrome.bookmarks.getChildren(folderId);
+    const bookmarks = children.filter(node => node.url); // Only get actual bookmarks, not subfolders
+    
+    console.log(`Learnspace: Found ${bookmarks.length} bookmarks in folder`);
+    
+    let success = 0;
+    let failed = 0;
+    
+    for (const bookmark of bookmarks) {
+      const result = await sendToWebapp(bookmark);
+      if (result) {
+        success++;
+      } else {
+        failed++;
+      }
+    }
+    
+    console.log(`Learnspace: Sync complete - ${success} succeeded, ${failed} failed`);
+    return { success, failed };
+  } catch (err) {
+    console.error('Learnspace: Error syncing bookmarks', err);
+    return { success: 0, failed: 0, error: err.message };
+  }
+}
+
 // Listen for sync request from dashboard content script
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'syncChromeToApi') {
     syncChromeToApi(msg.apiUrl).then(() => sendResponse({ ok: true })).catch(err => sendResponse({ ok: false, error: err.message }));
+    return true; // async response
+  }
+  if (msg.type === 'syncAllBookmarksToApi') {
+    syncAllBookmarksToApi().then(result => sendResponse({ ok: true, ...result })).catch(err => sendResponse({ ok: false, error: err.message }));
     return true; // async response
   }
 });

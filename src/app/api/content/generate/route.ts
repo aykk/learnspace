@@ -44,16 +44,17 @@ function buildSystemPrompt(prefs: UserContentPreferences): string {
     lines.push(
       '',
       'STRICT FORMAT RULES (verbal/text output):',
-      '- **Output format**: You MUST output content in Markdown format with proper structure:',
+      '- **Output format**: You MUST output content using proper formatting structure (do NOT mention "markdown" or "format" in your output):',
       '  * Use # for main title, ## for major sections, ### for subsections',
       '  * Use bullet points (- or *) for lists when appropriate',
       '  * Use **bold** for emphasis on important concepts',
       '  * Use *italic* for subtle emphasis',
       '  * Organize content with clear headers and logical flow',
       '  * Use code blocks (```) for technical terms or code examples when relevant',
-      `- **Text format**: Use ${prefs.textFormat || 'bullet'} format (bullet = bullet points, paragraph = continuous paragraphs, mixed = mix both) within the markdown structure.`,
+      `- **Text format**: Use ${prefs.textFormat || 'bullet'} format (bullet = bullet points, paragraph = continuous paragraphs, mixed = mix both).`,
       `- **Technical jargon**: ${prefs.jargonLevel || 'some'} — none = plain language only, some = light terminology, technical = full specialized terms. Stay within this level.`,
       '- **Key terms**: Identify 5-10 key technical terms or jargon words that are central to understanding the content. Wrap these terms with double underscores (__term__) so they can be underlined and made clickable for definitions. Only mark truly important terms that need explanation.',
+      '- **IMPORTANT**: Do NOT include the word "markdown" anywhere in your output. Just output the formatted content directly.',
       interestsList.length
         ? `- **Analogies**: Incorporate the user's interests (${interestsList.join(', ')}) when drawing analogies or examples. Use these topics to explain complex ideas when applicable.`
         : ''
@@ -165,12 +166,14 @@ Context:\n\n${contextBlock}`;
       let lastError = '';
       for (const model of MODELS) {
         const res = await callGemini(model, GEMINI_API_KEY, apiBody);
-        if (res.ok) {
-          const data = await res.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (text) {
-            return NextResponse.json({ content: text, sources });
-          } else {
+      if (res.ok) {
+        const data = await res.json();
+        let text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (text) {
+          // Remove any instances of the word "markdown" (case-insensitive) from the output
+          text = text.replace(/\bmarkdown\b/gi, '').trim();
+          return NextResponse.json({ content: text, sources });
+        } else {
             // No text returned - try next model
             lastError = 'No content generated from model';
             continue;
@@ -206,8 +209,10 @@ Context:\n\n${contextBlock}`;
 
       if (res.ok) {
         const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        let text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (text) {
+          // Remove any instances of the word "markdown" (case-insensitive) from the output
+          text = text.replace(/\bmarkdown\b/gi, '').trim();
           return NextResponse.json({ content: text });
         }
       } else {

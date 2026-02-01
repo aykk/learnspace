@@ -175,6 +175,7 @@ export default function Home() {
               filter: "blur(60px)",
             }}
           />
+
           <div 
             className="absolute top-0 right-0 h-[60vh] w-[45vw] z-20"
             style={{

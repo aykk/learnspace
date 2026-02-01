@@ -610,6 +610,50 @@ export default function Dashboard() {
     try {
       console.log('Refreshing clusters...');
       
+      // First, check if we have bookmarks and IRs
+      const [bookmarksRes, irsRes] = await Promise.all([
+        fetch('/api/bookmarks'),
+        fetch('/api/ir/extract?all=true'),
+      ]);
+      
+      let bookmarkCount = 0;
+      let irCount = 0;
+      
+      if (bookmarksRes.ok) {
+        const bookmarksData = await bookmarksRes.json();
+        bookmarkCount = Array.isArray(bookmarksData) ? bookmarksData.length : 0;
+      }
+      
+      if (irsRes.ok) {
+        const irsData = await irsRes.json();
+        irCount = Array.isArray(irsData.irs) ? irsData.irs.length : 0;
+      }
+      
+      // If no bookmarks at all, show helpful message
+      if (bookmarkCount === 0) {
+        alert('No bookmarks found. Add bookmarks to your learnspace folder using the Chrome extension, then sync them.');
+        setIsRefreshing(false);
+        return;
+      }
+      
+      // If bookmarks exist but no IRs, explain that IR extraction is in progress
+      if (irCount === 0) {
+        alert(
+          `Found ${bookmarkCount} bookmark${bookmarkCount === 1 ? '' : 's'}, but IR extraction is still in progress.\n\n` +
+          `IRs (Information Records) are automatically extracted from bookmarks in the background. ` +
+          `This may take a few moments. Please wait a bit and try refreshing again.\n\n` +
+          `If IRs don't appear after a few minutes, check the server logs for extraction errors.`
+        );
+        setIsRefreshing(false);
+        return;
+      }
+      
+      // If we have IRs but fewer than bookmarks, show progress
+      if (irCount < bookmarkCount) {
+        const pending = bookmarkCount - irCount;
+        console.log(`IR extraction in progress: ${irCount}/${bookmarkCount} complete (${pending} pending)`);
+      }
+      
       // Generate/update clusters (incremental: adds new IRs to existing clusters or creates new ones)
       const clustersRes = await fetch('/api/clusters/generate', {
         method: 'POST',
@@ -627,17 +671,28 @@ export default function Dashboard() {
       await loadClusters();
       
       if (result.mode === 'initial') {
-        alert(`Refresh complete! Created ${result.clustersGenerated} initial clusters.`);
+        alert(`Refresh complete! Created ${result.clustersGenerated} initial clusters from ${irCount} link${irCount === 1 ? '' : 's'}.`);
       } else if (result.mode === 'incremental') {
         if (result.assignmentsApplied === 0 && result.newClustersCreated === 0) {
           alert('All links already organized in clusters. Add new bookmarks to see updates!');
         } else {
-          alert(`Refresh complete! Added ${result.assignmentsApplied} links to existing clusters and created ${result.newClustersCreated} new clusters.`);
+          alert(`Refresh complete! Added ${result.assignmentsApplied} link${result.assignmentsApplied === 1 ? '' : 's'} to existing clusters and created ${result.newClustersCreated} new cluster${result.newClustersCreated === 1 ? '' : 's'}.`);
         }
       }
     } catch (error) {
       console.error('Refresh error:', error);
-      alert(`Refresh failed: ${(error as Error).message}`);
+      const errorMessage = (error as Error).message;
+      
+      // Provide more helpful error messages
+      if (errorMessage.includes('No IRs found')) {
+        alert(
+          `No IRs found yet. IR extraction happens automatically when bookmarks are added.\n\n` +
+          `If you just added bookmarks, please wait a moment for IR extraction to complete, then try again.\n\n` +
+          `If bookmarks were added a while ago and still no IRs appear, check the server console for extraction errors.`
+        );
+      } else {
+        alert(`Refresh failed: ${errorMessage}`);
+      }
     } finally {
       setIsRefreshing(false);
     }
@@ -683,7 +738,20 @@ export default function Dashboard() {
       const res = await fetch('/api/bookmarks');
       if (!res.ok) throw new Error('Failed to fetch links');
       const data = await res.json();
-      setBookmarks(Array.isArray(data) ? data : []);
+      const bookmarksArray = Array.isArray(data) ? data : [];
+      
+      // Deduplicate bookmarks by URL (in case API returns duplicates)
+      const seenUrls = new Set<string>();
+      const uniqueBookmarks = bookmarksArray.filter((b) => {
+        const url = b.URL || b.url;
+        if (!url || seenUrls.has(url)) {
+          return false;
+        }
+        seenUrls.add(url);
+        return true;
+      });
+      
+      setBookmarks(uniqueBookmarks);
     } catch (err) {
       console.error('Fetch bookmarks error:', err);
       setBookmarks([]);
@@ -1288,9 +1356,9 @@ export default function Dashboard() {
                   <p className="text-sm text-neutral-500">No links yet. Add one above.</p>
                 ) : (
                   <ul className="space-y-2">
-                    {bookmarks.map((b) => (
+                    {bookmarks.map((b, index) => (
                       <li
-                        key={b.ID}
+                        key={b.ID ? `bookmark-${b.ID}` : `bookmark-url-${b.URL}-${index}`}
                         className="flex items-center gap-3 py-2 px-3 rounded-sm border border-neutral-100 hover:bg-neutral-50/80"
                       >
                         <div className="flex-1 min-w-0">

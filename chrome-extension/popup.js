@@ -66,3 +66,41 @@ document.getElementById('open-learnspace').addEventListener('click', (e) => {
     }
   });
 });
+
+// Sync all bookmarks from folder to API
+document.getElementById('sync-bookmarks').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const link = e.target;
+  const originalText = link.textContent;
+  
+  try {
+    link.textContent = 'Syncing...';
+    link.style.pointerEvents = 'none';
+    
+    const response = await chrome.runtime.sendMessage({ type: 'syncAllBookmarksToApi' });
+    
+    if (response.ok) {
+      const msg = response.success > 0 
+        ? `Synced ${response.success} bookmark${response.success === 1 ? '' : 's'}!`
+        : 'No bookmarks to sync';
+      link.textContent = msg;
+      link.style.color = '#34c759';
+      setTimeout(() => {
+        link.textContent = originalText;
+        link.style.color = '';
+        link.style.pointerEvents = '';
+      }, 2000);
+    } else {
+      throw new Error(response.error || 'Sync failed');
+    }
+  } catch (err) {
+    link.textContent = 'Sync failed';
+    link.style.color = '#c0392b';
+    setTimeout(() => {
+      link.textContent = originalText;
+      link.style.color = '';
+      link.style.pointerEvents = '';
+    }, 2000);
+    console.error('Sync error:', err);
+  }
+});
