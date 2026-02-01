@@ -341,34 +341,32 @@ export default function Home() {
           <div className="relative z-30 max-w-4xl mx-auto px-8 text-center">
             <div className="flex flex-col items-center mb-8">
               <h2 className="text-3xl md:text-5xl lg:text-6xl font-semibold text-neutral-900/80 font-[family-name:var(--font-display)] text-center whitespace-nowrap">
-                Built for the future of <span className="relative inline-block pb-2">learning<span className="absolute bottom-0 left-0 w-full h-[3px]" style={{ backgroundColor: "#e07850" }} /></span>
+                Turn casual browsing into <span className="relative inline-block pb-2">learning<span className="absolute bottom-0 left-0 w-full h-[3px]" style={{ backgroundColor: "#e07850" }} /></span>
               </h2>
             </div>
             <p className="text-lg md:text-xl text-neutral-900/60 font-[family-name:var(--font-body)] leading-relaxed mb-12">
-              Learnspace combines cutting-edge technology with thoughtful design to create 
-              immersive educational experiences. Join thousands of learners and educators 
-              who are reimagining what&apos;s possible.
+              Bookmark content you find interesting while browsing. Learnspace combines AI with intuitive design to extract key insights, group related content into <span style={{ color: "#e07850", fontWeight: 600 }}>Clusters</span>, and generate personalized learning materials, from tailored text summaries to podcasts and flashcards.
             </p>
             
             {/* Feature grid */}
             <div className="grid grid-cols-3 gap-8 mt-12">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-neutral-900/10 flex items-center justify-center">
-                  <span className="text-2xl">✦</span>
+                  <span className="text-2xl" style={{ color: "#e07850" }}>✦</span>
                 </div>
-                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">Interactive</span>
+                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">AI-Powered</span>
               </div>
               <div className="flex flex-col items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-neutral-900/10 flex items-center justify-center">
-                  <span className="text-2xl">◈</span>
+                  <span className="text-2xl" style={{ color: "#e07850" }}>◈</span>
                 </div>
-                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">Collaborative</span>
+                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">Personalized</span>
               </div>
               <div className="flex flex-col items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-neutral-900/10 flex items-center justify-center">
-                  <span className="text-2xl">❋</span>
+                  <span className="text-2xl" style={{ color: "#e07850" }}>❋</span>
                 </div>
-                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">Innovative</span>
+                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">Effortless</span>
               </div>
             </div>
           </div>
@@ -383,7 +381,7 @@ export default function Home() {
         </section>
 
         {/* SECTION 3: FEATURES */}
-        <section id="features" className="relative h-[100vh] w-full flex items-center justify-center py-12">
+        <section id="features" className="relative min-h-[100vh] w-full flex flex-col items-center justify-center py-16 md:py-24">
           {/* Background continuity */}
           <div className="absolute inset-0 bg-[#d0d0d0]" />
           
@@ -395,99 +393,115 @@ export default function Home() {
             }}
           />
 
-          {/* Features Content */}
-          <div className="relative z-30 max-w-5xl mx-auto px-8">
-            <div className="flex flex-col items-center mb-6">
-              <h2 className="text-4xl md:text-6xl font-semibold text-neutral-900/80 font-[family-name:var(--font-display)] text-center">
-                Features
+          {/* Features Content - Grid Layout */}
+          <div className="relative z-30 max-w-6xl mx-auto px-8 w-full">
+            {/* Title at top, left-aligned */}
+            <div className="mb-12 md:mb-16">
+              <h2 className="text-3xl md:text-5xl lg:text-6xl font-semibold text-neutral-900/80 font-[family-name:var(--font-display)]">
+                What can Learnspace do for you<span style={{ color: "#e07850" }}>?</span>
               </h2>
-              <span className="mt-3 w-12 h-[3px]" style={{ backgroundColor: "#e07850" }} />
             </div>
-            <p className="text-lg md:text-xl text-neutral-900/60 font-[family-name:var(--font-body)] leading-relaxed mb-8 text-center max-w-2xl mx-auto">
-              Everything you need to transform your learning journey
-            </p>
             
-            {/* Features Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {/* Feature 1 */}
-              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
+            {/* 6-box grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Feature 1 - Chrome Extension */}
+              <div 
+                className="group p-6 bg-white/40 backdrop-blur-sm transition-all duration-300 rounded-lg hover:bg-gradient-to-br hover:from-white/60 hover:to-orange-50/40" 
+                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+              >
+                <div className="w-10 h-10 mb-4 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
                   ◎
                 </div>
-                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
-                  Smart Organization
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
+                  Browser Extension
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
-                  Automatically categorize and connect your notes, ideas, and resources with intelligent tagging.
+                  Save interesting articles with one click using our Chrome extension. Your bookmarks sync automatically.
                 </p>
               </div>
 
-              {/* Feature 2 */}
-              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
+              {/* Feature 2 - AI Content Analysis */}
+              <div 
+                className="group p-6 bg-white/40 backdrop-blur-sm transition-all duration-300 rounded-lg hover:bg-gradient-to-br hover:from-white/60 hover:to-orange-50/40" 
+                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+              >
+                <div className="w-10 h-10 mb-4 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
                   ⬡
                 </div>
-                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
-                  Visual Mapping
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
+                  AI Content Analysis
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
-                  See connections between concepts with beautiful, interactive knowledge graphs.
+                  Automatically extract summaries, key topics, and core concepts from every article you save.
                 </p>
               </div>
 
-              {/* Feature 3 */}
-              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
+              {/* Feature 3 - Smart Clustering */}
+              <div 
+                className="group p-6 bg-white/40 backdrop-blur-sm transition-all duration-300 rounded-lg hover:bg-gradient-to-br hover:from-white/60 hover:to-orange-50/40" 
+                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+              >
+                <div className="w-10 h-10 mb-4 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
                   ◈
                 </div>
-                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
-                  Collaborative Spaces
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
+                  Smart Clustering
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
-                  Share knowledge and build understanding together with real-time collaboration tools.
+                  AI groups related content into learning paths based on semantic similarity. See connections you missed.
                 </p>
               </div>
 
-              {/* Feature 4 */}
-              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
+              {/* Feature 4 - Personalized Content */}
+              <div 
+                className="group p-6 bg-white/40 backdrop-blur-sm transition-all duration-300 rounded-lg hover:bg-gradient-to-br hover:from-white/60 hover:to-orange-50/40" 
+                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+              >
+                <div className="w-10 h-10 mb-4 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
                   ✧
                 </div>
-                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
-                  AI-Powered Insights
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
+                  Personalized Content
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
-                  Get personalized suggestions and discover hidden patterns in your learning data.
+                  Generate study materials tailored to your reading style, whether you prefer bullet points, explanations, or deep dives.
                 </p>
               </div>
 
-              {/* Feature 5 */}
-              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
+              {/* Feature 5 - Podcast Generation */}
+              <div 
+                className="group p-6 bg-white/40 backdrop-blur-sm transition-all duration-300 rounded-lg hover:bg-gradient-to-br hover:from-white/60 hover:to-orange-50/40" 
+                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+              >
+                <div className="w-10 h-10 mb-4 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
                   ⊕
                 </div>
-                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
-                  Universal Import
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
+                  Podcast Generation
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
-                  Bring in content from anywhere—PDFs, web clips, notes, and more—seamlessly.
+                  Turn your saved articles into engaging AI-generated podcasts. Learn on the go with two-host conversations.
                 </p>
               </div>
 
-              {/* Feature 6 */}
-              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
+              {/* Feature 6 - Flashcard Study */}
+              <div 
+                className="group p-6 bg-white/40 backdrop-blur-sm transition-all duration-300 rounded-lg hover:bg-gradient-to-br hover:from-white/60 hover:to-orange-50/40" 
+                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+              >
+                <div className="w-10 h-10 mb-4 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
                   ◇
                 </div>
-                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
-                  Focused Learning
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
+                  Flashcard Study
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
-                  Distraction-free modes and spaced repetition help you retain what matters most.
+                  Auto-generate Q&A flashcards from your content clusters for effective retention and active recall.
                 </p>
               </div>
             </div>
           </div>
+          
           
           {/* Bottom fade gradient */}
           <div 

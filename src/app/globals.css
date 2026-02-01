@@ -215,3 +215,45 @@ body {
   animation: flashcard-slide-in-left 0.35s ease-out forwards;
 }
 
+/* Feature mind map floating animations */
+@keyframes feature-float-1 {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(2px, -2px); }
+  50% { transform: translate(-2px, 2px); }
+  75% { transform: translate(-2px, -2px); }
+}
+
+@keyframes feature-float-2 {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, -2px); }
+  50% { transform: translate(2px, 2px); }
+  75% { transform: translate(2px, -2px); }
+}
+
+@keyframes feature-float-3 {
+  0%, 100% { transform: translateY(-50%) translate(0, 0); }
+  25% { transform: translateY(-50%) translate(2px, -2px); }
+  50% { transform: translateY(-50%) translate(-2px, 2px); }
+  75% { transform: translateY(-50%) translate(-2px, -2px); }
+}
+
+@keyframes feature-float-4 {
+  0%, 100% { transform: translateY(-50%) translate(0, 0); }
+  25% { transform: translateY(-50%) translate(-2px, -2px); }
+  50% { transform: translateY(-50%) translate(2px, 2px); }
+  75% { transform: translateY(-50%) translate(2px, -2px); }
+}
+
+@keyframes feature-float-5 {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(2px, 2px); }
+  50% { transform: translate(-2px, -2px); }
+  75% { transform: translate(-2px, 2px); }
+}
+
+@keyframes feature-float-6 {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 2px); }
+  50% { transform: translate(2px, -2px); }
+  75% { transform: translate(2px, 2px); }
+}
