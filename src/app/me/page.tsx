@@ -31,6 +31,8 @@ interface GeneratedContent {
   content?: string;
   podcastUrl?: string;
   sources?: Array<{ title: string; url: string }>;
+  /** Number of links in the cluster when content was generated; used to show "Regenerate Content" when new links are added */
+  linkCountWhenGenerated?: number;
 }
 
 interface Flashcard {
@@ -116,6 +118,8 @@ interface GeneratedContent {
   content?: string;
   podcastUrl?: string;
   sources?: Array<{ title: string; url: string }>;
+  /** Number of links in the cluster when content was generated; used to show "Regenerate Content" when new links are added */
+  linkCountWhenGenerated?: number;
 }
 
 interface Flashcard {
@@ -144,6 +148,8 @@ interface Cluster {
   isHidden: boolean;
   generatedContent?: GeneratedContent;
   flashcards?: Flashcard[];
+  /** Number of links when flashcards were generated; used to show "Regenerate Flashcards" when new links are added */
+  flashcardLinkCountWhenGenerated?: number;
 }
 
 export default function Dashboard() {
@@ -172,6 +178,10 @@ export default function Dashboard() {
   const [selectedJargon, setSelectedJargon] = useState<string | null>(null);
   const [jargonDefinition, setJargonDefinition] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [addLinkOpen, setAddLinkOpen] = useState(false);
+  const [addLinkUrl, setAddLinkUrl] = useState('');
+  const [addLinkAdding, setAddLinkAdding] = useState(false);
+  const [addLinkMessage, setAddLinkMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const clusterRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -351,12 +361,15 @@ export default function Dashboard() {
         body: JSON.stringify({ term, context }),
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        throw new Error('Failed to fetch definition');
+        const message = (data as { error?: string })?.error || `Unable to load definition for "${term}". Please try again.`;
+        setJargonDefinition(message);
+        return;
       }
 
-      const data = await response.json();
-      setJargonDefinition(data.definition || `No definition found for "${term}".`);
+      setJargonDefinition((data as { definition?: string }).definition || `No definition found for "${term}".`);
     } catch (error) {
       console.error('Jargon definition error:', error);
       setJargonDefinition(`Unable to load definition for "${term}". Please try again.`);
@@ -528,8 +541,25 @@ export default function Dashboard() {
           });
         } catch { /* ignore */ }
       }
+
+      // Restore persisted flashcards and link count (supports old format: array, or new: { flashcards, linkCountWhenGenerated })
+      let withPersistedFlashcards = withPersistedContent;
+      if (typeof window !== 'undefined') {
+        try {
+          const flashSaved = localStorage.getItem(CLUSTER_FLASHCARDS_KEY);
+          const flashParsed: Record<string, { flashcards: Flashcard[]; linkCountWhenGenerated?: number } | Flashcard[]> = flashSaved ? JSON.parse(flashSaved) : {};
+          withPersistedFlashcards = withPersistedContent.map((c) => {
+            const raw = flashParsed[c.id];
+            if (!raw) return c;
+            const flashcards = Array.isArray(raw) ? raw : raw.flashcards;
+            const linkCountWhenGenerated = Array.isArray(raw) ? undefined : raw.linkCountWhenGenerated;
+            if (flashcards && flashcards.length > 0) return { ...c, flashcards, flashcardLinkCountWhenGenerated: linkCountWhenGenerated };
+            return c;
+          });
+        } catch { /* ignore */ }
+      }
       
-      setClusters(withPersistedContent);
+      setClusters(withPersistedFlashcards);
     } catch (error) {
       console.error('Error loading clusters:', error);
     }
@@ -587,6 +617,37 @@ export default function Dashboard() {
     }
   };
 
+  // Add link manually (same behavior as Chrome extension "Add link manually")
+  const handleAddLink = async () => {
+    let url = addLinkUrl.trim();
+    if (!url) {
+      setAddLinkMessage({ type: 'error', text: 'Enter a URL' });
+      return;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+    setAddLinkAdding(true);
+    setAddLinkMessage(null);
+    try {
+      const res = await fetch('/api/bookmarks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to add link');
+      }
+      setAddLinkMessage({ type: 'success', text: 'Added!' });
+      setAddLinkUrl('');
+    } catch (err) {
+      setAddLinkMessage({ type: 'error', text: (err as Error).message || 'Failed to add' });
+    } finally {
+      setAddLinkAdding(false);
+    }
+  };
+
   // Generate content for a cluster based on user preferences
   const handleGenerateContent = async (clusterId: string) => {
     if (!preferences) {
@@ -594,9 +655,12 @@ export default function Dashboard() {
       return;
     }
 
-    // Don't call the API again if we already have generated content (text or podcast)
+    // Don't call the API again if we already have generated content and no new links were added to the cluster
     const cluster = clusters.find(c => c.id === clusterId);
-    if (cluster?.generatedContent?.content || cluster?.generatedContent?.podcastUrl) {
+    const hasContent = cluster?.generatedContent?.content || cluster?.generatedContent?.podcastUrl;
+    const linkCountUnchanged = cluster?.generatedContent?.linkCountWhenGenerated === undefined
+      || cluster.generatedContent!.linkCountWhenGenerated === cluster.links.length;
+    if (hasContent && linkCountUnchanged) {
       setContentLoading(false);
       return;
     }
@@ -674,12 +738,13 @@ export default function Dashboard() {
         
         const data = await response.json();
         
-        // Update cluster with generated content
-        const updatedCluster = { ...clusters.find(c => c.id === clusterId)! };
+        // Update cluster with generated content and link count so we can detect "new links added" later
+        const clusterForCount = clusters.find(c => c.id === clusterId);
         updateCluster(clusterId, {
           generatedContent: {
             content: data.content,
             sources: data.sources || [],
+            linkCountWhenGenerated: clusterForCount?.links.length,
           },
         });
         
@@ -696,8 +761,11 @@ export default function Dashboard() {
   // Generate flashcards for a cluster
   const handleGenerateFlashcards = async (clusterId: string) => {
     const cluster = clusters.find(c => c.id === clusterId);
-    // Don't call the API again if we already have flashcards (from state or persisted)
-    if (cluster?.flashcards && cluster.flashcards.length > 0) {
+    // If we already have flashcards and no new links were added, just open the flashcard window
+    const hasFlashcards = cluster?.flashcards && cluster.flashcards.length > 0;
+    const flashcardLinkCountUnchanged = cluster?.flashcardLinkCountWhenGenerated === undefined
+      || cluster.flashcardLinkCountWhenGenerated === cluster.links.length;
+    if (hasFlashcards && flashcardLinkCountUnchanged) {
       setFlippedFlashcardIndices(new Set());
       setFlashcardWindowCluster(cluster);
       setFlashcardWindowOpen(true);
@@ -724,9 +792,9 @@ export default function Dashboard() {
       })).filter((fc: Flashcard) => fc.front && fc.back);
 
       const cluster = clusters.find(c => c.id === clusterId);
-      const clusterWithFlashcards = cluster ? { ...cluster, flashcards } : null;
+      const clusterWithFlashcards = cluster ? { ...cluster, flashcards, flashcardLinkCountWhenGenerated: cluster.links.length } : null;
 
-      updateCluster(clusterId, { flashcards });
+      updateCluster(clusterId, { flashcards, flashcardLinkCountWhenGenerated: cluster?.links.length });
 
       // Open flashcard window with the new data (same behavior as View Content)
       if (clusterWithFlashcards && flashcards.length > 0) {
@@ -770,21 +838,28 @@ export default function Dashboard() {
     if (updates.generatedContent && typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem(CLUSTER_CONTENT_KEY);
-        const all: Record<string, { content?: string; podcastUrl?: string; sources?: { title: string; url: string }[] }> = raw ? JSON.parse(raw) : {};
+        const all: Record<string, { content?: string; podcastUrl?: string; sources?: { title: string; url: string }[]; linkCountWhenGenerated?: number }> = raw ? JSON.parse(raw) : {};
         all[clusterId] = updates.generatedContent;
         localStorage.setItem(CLUSTER_CONTENT_KEY, JSON.stringify(all));
       } catch { /* ignore */ }
     }
-    // Persist flashcards so we don't call the API again after refresh
+    // Persist flashcards and link count so we can detect "new links added" later
     if (updates.flashcards && typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem(CLUSTER_FLASHCARDS_KEY);
-        const all: Record<string, { front: string; back: string; source?: string }[]> = raw ? JSON.parse(raw) : {};
-        all[clusterId] = updates.flashcards;
+        const all: Record<string, { flashcards: { front: string; back: string; source?: string }[]; linkCountWhenGenerated?: number }> = raw ? JSON.parse(raw) : {};
+        all[clusterId] = { flashcards: updates.flashcards, linkCountWhenGenerated: updates.flashcardLinkCountWhenGenerated };
         localStorage.setItem(CLUSTER_FLASHCARDS_KEY, JSON.stringify(all));
       } catch { /* ignore */ }
     }
   }, [selectedCluster, contentWindowCluster]);
+
+  // True when new links were added and content and/or flashcards still need to be regenerated
+  const clusterNeedsRegen = (c: Cluster): boolean => {
+    const contentNeedsRegen = (c.generatedContent?.content || c.generatedContent?.podcastUrl) && c.generatedContent?.linkCountWhenGenerated != null && c.links.length !== c.generatedContent.linkCountWhenGenerated;
+    const flashcardsNeedRegen = c.flashcards && c.flashcards.length > 0 && c.flashcardLinkCountWhenGenerated != null && c.links.length !== c.flashcardLinkCountWhenGenerated;
+    return contentNeedsRegen || flashcardsNeedRegen;
+  };
 
   // Toggle read status
   const toggleRead = (clusterId: string) => {
@@ -989,12 +1064,14 @@ export default function Dashboard() {
                 }}
               >
                 <div className="flex items-center gap-3">
-                  {/* Read indicator */}
-                  {cluster.isRead && (
+                  {/* Regen-needed indicator (orange !) or read indicator (orange checkmark) */}
+                  {clusterNeedsRegen(cluster) ? (
+                    <span className="flex-shrink-0 text-sm font-bold" style={{ color: "#e07850" }}>!</span>
+                  ) : cluster.isRead ? (
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e07850" strokeWidth="3" className="flex-shrink-0">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                  )}
+                  ) : null}
                   <div 
                     className={`w-3 h-3 rounded-full flex-shrink-0 ${cluster.isHidden ? 'opacity-40' : ''}`}
                     style={{ 
@@ -1036,7 +1113,10 @@ export default function Dashboard() {
           </button>
           
           {/* Add Link Button */}
-          <button className="w-full px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 font-[family-name:var(--font-body)] transition-colors duration-200 flex items-center justify-center gap-2 bg-white/30 hover:bg-white/50 rounded-sm">
+          <button
+            onClick={() => setAddLinkOpen(true)}
+            className="w-full px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 font-[family-name:var(--font-body)] transition-colors duration-200 flex items-center justify-center gap-2 bg-white/30 hover:bg-white/50 rounded-sm"
+          >
             <span className="text-lg">+</span> Add Link
           </button>
           
@@ -1068,6 +1148,67 @@ export default function Dashboard() {
           </label>
         </div>
       </aside>
+
+      {/* Add Link Modal - same behavior as extension "Add link manually" */}
+      {addLinkOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] px-4"
+          role="dialog"
+          aria-label="Add link"
+        >
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => {
+              setAddLinkOpen(false);
+              setAddLinkMessage(null);
+            }}
+          />
+          <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-md rounded-sm shadow-lg border border-neutral-200 p-4 font-[family-name:var(--font-body)]">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-semibold text-neutral-900">Add link</h3>
+              <button
+                onClick={() => {
+                  setAddLinkOpen(false);
+                  setAddLinkMessage(null);
+                }}
+                className="text-neutral-500 hover:text-neutral-900 p-1"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <input
+              type="url"
+              value={addLinkUrl}
+              onChange={(e) => setAddLinkUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddLink();
+              }}
+              placeholder="Paste a link"
+              className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-sm bg-white/80 text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-[#e07850]/50 focus:border-[#e07850]"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={handleAddLink}
+              disabled={addLinkAdding}
+              className="w-full mt-3 px-4 py-2 text-sm font-medium text-white uppercase tracking-wider rounded-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ backgroundColor: '#e07850' }}
+            >
+              {addLinkAdding ? 'Adding...' : 'Add'}
+            </button>
+            {addLinkMessage && (
+              <p
+                className={`mt-2 text-xs font-medium ${
+                  addLinkMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
+                {addLinkMessage.text}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* MAIN CONTENT - Cluster Visualization */}
       <main className={`relative z-30 flex-1 min-h-screen overflow-hidden transition-all duration-500 ${selectedCluster ? 'mr-80' : ''}`}>
@@ -1230,15 +1371,17 @@ export default function Dashboard() {
                   opacity: hasFocus && !isSelected && !isSearchMatch ? 0.3 : 1,
                 }}
               >
-                {/* Read indicator */}
-                {cluster.isRead && (
+                {/* Regen-needed (!) or read (checkmark) indicator on top of circle */}
+                {(clusterNeedsRegen(cluster) || cluster.isRead) && (
                   <div 
-                    className="absolute -top-2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center z-20"
+                    className="absolute -top-2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center z-20 text-white text-xs font-bold"
                     style={{ backgroundColor: "#e07850" }}
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    {clusterNeedsRegen(cluster) ? '!' : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
                   </div>
                 )}
 
@@ -1326,17 +1469,14 @@ export default function Dashboard() {
             <div className="p-6 border-b border-neutral-300/50">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  {/* Read indicator */}
-                  {selectedCluster.isRead && (
-                    <div 
-                      className="w-5 h-5 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: "#e07850" }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </div>
-                  )}
+                  {/* Regen-needed indicator (orange !) or read indicator (orange checkmark) */}
+                  {clusterNeedsRegen(selectedCluster) ? (
+                    <span className="flex-shrink-0 text-sm font-bold" style={{ color: "#e07850" }}>!</span>
+                  ) : selectedCluster.isRead ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e07850" strokeWidth="3" className="flex-shrink-0">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : null}
                   {/* Color picker */}
                   <input 
                     type="color"
@@ -1365,15 +1505,19 @@ export default function Dashboard() {
                 <button 
                   onClick={() => toggleRead(selectedCluster.id)}
                   className={`flex-1 px-3 py-2 text-xs rounded-sm transition-colors flex items-center justify-center gap-2 ${
-                    selectedCluster.isRead 
+                    !clusterNeedsRegen(selectedCluster) && selectedCluster.isRead 
                       ? 'bg-[#e07850] text-white' 
                       : 'bg-white/50 text-neutral-600 hover:bg-white/70'
                   }`}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  {selectedCluster.isRead ? 'Read' : 'Mark as Read'}
+                  {clusterNeedsRegen(selectedCluster) ? (
+                    <span className="font-bold" style={{ color: '#e07850' }}>!</span>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                  {clusterNeedsRegen(selectedCluster) ? 'Regen needed' : selectedCluster.isRead ? 'Read' : 'Mark as Read'}
                 </button>
                 <button 
                   onClick={() => toggleHidden(selectedCluster.id)}
@@ -1499,20 +1643,33 @@ export default function Dashboard() {
                     </p>
                   )}
                 </>
-              ) : (
-                <button 
-                  onClick={() => {
-                    setContentWindowCluster(selectedCluster);
-                    setContentWindowOpen(true);
-                  }}
-                  className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
-                  style={{ backgroundColor: selectedCluster.color }}
-                >
-                  View Content
-                </button>
-              )}
+              ) : (() => {
+                const hasNewLinks = selectedCluster.generatedContent?.linkCountWhenGenerated != null
+                  && selectedCluster.links.length !== selectedCluster.generatedContent!.linkCountWhenGenerated;
+                return hasNewLinks ? (
+                  <button 
+                    onClick={() => handleGenerateContent(selectedCluster.id)}
+                    disabled={contentLoading || !preferences}
+                    className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: selectedCluster.color }}
+                  >
+                    {contentLoading ? contentStatus || 'Regenerating...' : 'Regenerate Content'}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setContentWindowCluster(selectedCluster);
+                      setContentWindowOpen(true);
+                    }}
+                    className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
+                    style={{ backgroundColor: selectedCluster.color }}
+                  >
+                    View Content
+                  </button>
+                );
+              })()}
               
-              {!selectedCluster.flashcards ? (
+              {!selectedCluster.flashcards || selectedCluster.flashcards.length === 0 ? (
                 <button 
                   onClick={() => handleGenerateFlashcards(selectedCluster.id)}
                   disabled={flashcardLoading || !selectedCluster.generatedContent}
@@ -1521,21 +1678,34 @@ export default function Dashboard() {
                 >
                   {flashcardLoading ? 'Generating Flashcards...' : 'Generate Flashcards'}
                 </button>
-              ) : (
-                <button 
-                  onClick={() => {
-                    setFlippedFlashcardIndices(new Set());
-                    setCurrentFlashcardIndex(0);
-                    setFlashcardSlideDirection(null);
-                    setFlashcardWindowCluster(selectedCluster);
-                    setFlashcardWindowOpen(true);
-                  }}
-                  className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
-                  style={{ backgroundColor: selectedCluster.color }}
-                >
-                  View Flashcards
-                </button>
-              )}
+              ) : (() => {
+                const hasNewLinks = selectedCluster.flashcardLinkCountWhenGenerated != null
+                  && selectedCluster.links.length !== selectedCluster.flashcardLinkCountWhenGenerated;
+                return hasNewLinks ? (
+                  <button 
+                    onClick={() => handleGenerateFlashcards(selectedCluster.id)}
+                    disabled={flashcardLoading || !selectedCluster.generatedContent}
+                    className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: selectedCluster.color }}
+                  >
+                    {flashcardLoading ? 'Regenerating Flashcards...' : 'Regenerate Flashcards'}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setFlippedFlashcardIndices(new Set());
+                      setCurrentFlashcardIndex(0);
+                      setFlashcardSlideDirection(null);
+                      setFlashcardWindowCluster(selectedCluster);
+                      setFlashcardWindowOpen(true);
+                    }}
+                    className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
+                    style={{ backgroundColor: selectedCluster.color }}
+                  >
+                    View Flashcards
+                  </button>
+                );
+              })()}
             </div>
           </div>
         )}

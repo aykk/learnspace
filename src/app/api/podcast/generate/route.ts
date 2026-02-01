@@ -170,21 +170,31 @@ export async function GET(request: NextRequest) {
             result = data;
             break;
           }
-          if (data.error && data.error_details) throw new Error(data.error_details);
+          if (data.error && data.error_details) {
+            const msg = typeof data.error_details === 'string' ? data.error_details : 'Podcast generation failed.';
+            send('error', { error: msg });
+            return finish();
+          }
 
           await new Promise((resolve) => setTimeout(resolve, intervalMs));
         }
 
-        if (!result) throw new Error('Podcast generation timed out after 10 minutes');
+        if (!result) {
+          send('error', { error: 'Podcast generation timed out. Please try again.' });
+          return finish();
+        }
 
         if (result.error && result.error_details) {
-          throw new Error(result.error_details);
+          const msg = typeof result.error_details === 'string' ? result.error_details : 'Podcast generation failed.';
+          send('error', { error: msg });
+          return finish();
         }
 
         const url = result.url || result.output_url || result.audio_url || null;
         if (!url) {
           console.error('Wondercraft response (no url):', JSON.stringify(result));
-          throw new Error('Wondercraft finished but returned no audio URL.');
+          send('error', { error: 'Podcast finished but no audio was produced. Please try again.' });
+          return finish();
         }
 
         send('done', {
