@@ -184,3 +184,34 @@ body {
   animation: bounce-slow 2.5s ease-in-out infinite;
 }
 
+/* Flashcard carousel - slide in when changing cards */
+@keyframes flashcard-slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes flashcard-slide-in-left {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.flashcard-enter-right {
+  animation: flashcard-slide-in-right 0.35s ease-out forwards;
+}
+
+.flashcard-enter-left {
+  animation: flashcard-slide-in-left 0.35s ease-out forwards;
+}
+
