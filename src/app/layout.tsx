@@ -27,6 +27,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Learnspace",
   description: "Learnspace",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
