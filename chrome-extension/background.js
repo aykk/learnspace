@@ -1,5 +1,5 @@
 // Configure your endpoint here — Next.js app (npm run dev)
-const WEBAPP_URL = 'http://localhost:3000/api/bookmarks';
+const WEBAPP_URL = 'http://localhost:3000/bookmarks';
 
 const LEARNSPACE_FOLDER_NAME = 'learnspace';
 
