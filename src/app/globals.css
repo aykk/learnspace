@@ -23,4 +23,79 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Breathing animation for circle gradients - opacity only to avoid transform conflicts */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 1;
+    filter: blur(60px);
+  }
+  50% {
+    opacity: 0.85;
+    filter: blur(65px);
+  }
+}
+
+@keyframes breathe-slow {
+  0%, 100% {
+    opacity: 1;
+    filter: blur(50px);
+  }
+  50% {
+    opacity: 0.9;
+    filter: blur(55px);
+  }
+}
+
+@keyframes breathe-mid {
+  0%, 100% {
+    opacity: 1;
+    filter: blur(40px);
+  }
+  50% {
+    opacity: 0.92;
+    filter: blur(45px);
+  }
+}
+
+@keyframes breathe-glow {
+  0%, 100% {
+    opacity: 0.4;
+    filter: blur(100px);
+  }
+  50% {
+    opacity: 0.5;
+    filter: blur(110px);
+  }
+}
+
+@keyframes breathe-ring {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.88;
+  }
+}
+
+.breathe {
+  animation: breathe 10s ease-in-out infinite;
+}
+
+.breathe-slow {
+  animation: breathe-slow 12s ease-in-out infinite;
+}
+
+.breathe-mid {
+  animation: breathe-mid 8s ease-in-out infinite;
+}
+
+.breathe-glow {
+  animation: breathe-glow 7s ease-in-out infinite;
+}
+
+.breathe-ring {
+  animation: breathe-ring 9s ease-in-out infinite;
 }
