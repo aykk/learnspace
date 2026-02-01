@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { SURVEY_CONFIG } from '@/lib/survey-config';
 
 interface Bookmark {
@@ -308,7 +309,9 @@ export default function Dashboard() {
     try {
       const res = await fetch('/api/clusters');
       const data = await res.json();
-      setClusters(data.clusters || []);
+      const list = data.clusters || [];
+      // Only keep clusters with at least one member (API also filters; this handles stale state)
+      setClusters(list.filter((c: Cluster) => (c.memberCount ?? 0) > 0 && (c.irIds?.length ?? 0) > 0));
     } catch (error) {
       console.error('Failed to fetch clusters:', error);
       setClusters([]);
@@ -582,42 +585,68 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1a2e] text-white">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-[#16162a]">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-[#29b5e8]">❄️ Learnspace Dashboard</h1>
-          <Link 
-            href="/" 
-            className="text-white/70 hover:text-white transition-colors text-sm"
+    <div className="min-h-screen bg-[#d0d0d0] text-neutral-900">
+      {/* Terminal-style header */}
+      <header className="border-b border-neutral-800 bg-[#1a1a1a] font-mono">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Learnspace home">
+            <Image
+              src="/learnspacelogo.svg"
+              alt=""
+              width={28}
+              height={28}
+              className="opacity-95"
+              style={{ filter: 'invert(0.55) sepia(1) saturate(4) hue-rotate(350deg) brightness(1.05)' }}
+            />
+          </Link>
+          <span className="flex gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-[#e07850]" aria-hidden />
+            <span className="w-3 h-3 rounded-full bg-neutral-600" aria-hidden />
+            <span className="w-3 h-3 rounded-full bg-neutral-600" aria-hidden />
+          </span>
+          <span className="text-neutral-500 text-sm select-none">user@learnspace:~$</span>
+          <span className="text-neutral-300 text-sm">./dashboard</span>
+          <span className="flex-1" />
+          <Link
+            href="/"
+            className="text-neutral-500 hover:text-[#e07850] transition-colors text-sm tracking-wide"
           >
-            ← Back to Home
+            ← home
           </Link>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        {/* Status Card */}
-        <div className="bg-[#29b5e8]/10 border-l-4 border-[#29b5e8] rounded-r-lg p-4 mb-8 flex items-center justify-between flex-wrap gap-2">
+      <main
+          className="max-w-5xl mx-auto px-6 py-8 relative min-h-[50vh]"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px)',
+            backgroundSize: '20px 20px',
+          }}
+        >
+        {/* Status Card - dev panel */}
+        <div className="bg-white/60 border-l-4 border-[#e07850] rounded-r-lg p-4 mb-8 flex items-center justify-between flex-wrap gap-2 shadow-sm">
           <div>
-            <p className="font-semibold text-[#29b5e8]">Table: LEARNSPACE_BOOKMARKS</p>
-            <p className="text-white/60 text-sm mt-1">
-              Database: <code className="bg-white/10 px-2 py-0.5 rounded">learnspace.db</code> — 
+            <p className="font-mono font-semibold text-neutral-900 text-sm tracking-tight">
+              Table: <span className="text-[#e07850]">LEARNSPACE_BOOKMARKS</span>
+            </p>
+            <p className="text-neutral-600 text-sm mt-1">
+              Database: <code className="font-mono bg-neutral-200/80 text-neutral-800 px-2 py-0.5 rounded text-xs">learnspace.db</code>
+              {' — '}
               Add bookmarks below or use the Chrome extension.
             </p>
           </div>
           <button
             onClick={() => fetchBookmarks()}
             disabled={loading}
-            className="text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded transition-colors disabled:opacity-50"
+            className="font-mono text-sm bg-neutral-200 hover:bg-neutral-300 text-neutral-800 px-3 py-1.5 rounded transition-colors disabled:opacity-50"
           >
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
 
-        {/* Add Bookmark Form */}
-        <div className="bg-[#16162a] rounded-xl p-6 mb-8 border border-white/10">
-          <h2 className="text-lg font-semibold mb-4">Add Bookmark</h2>
+        {/* Add Bookmark Form - dev panel */}
+        <div className="bg-white/50 rounded-lg p-6 mb-8 border border-neutral-300/80 shadow-sm">
+          <h2 className="font-mono text-sm font-semibold text-neutral-800 uppercase tracking-wider mb-4">Add Bookmark</h2>
           <form onSubmit={handleAddBookmark} className="flex flex-col sm:flex-row gap-3">
             <input
               type="url"
@@ -625,100 +654,101 @@ export default function Dashboard() {
               value={newUrl}
               onChange={(e) => setNewUrl(e.target.value)}
               required
-              className="flex-1 bg-white/5 border border-white/20 rounded-lg px-4 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8]"
+              className="flex-1 font-mono text-sm bg-white border border-neutral-300 rounded px-4 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850]"
             />
             <input
               type="text"
               placeholder="Title (optional)"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              className="flex-1 bg-white/5 border border-white/20 rounded-lg px-4 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8]"
+              className="flex-1 font-mono text-sm bg-white border border-neutral-300 rounded px-4 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850]"
             />
             <button
               type="submit"
               disabled={adding}
-              className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 text-white font-medium px-6 py-2 rounded-lg transition-colors"
+              className="bg-[#e07850] hover:brightness-110 disabled:opacity-50 text-white font-medium px-6 py-2 rounded-none uppercase tracking-widest text-sm transition-all"
             >
               {adding ? 'Adding…' : 'Add'}
             </button>
           </form>
           {addError && (
-            <p className="mt-2 text-sm text-red-400">{addError}</p>
+            <p className="mt-2 text-sm text-red-600 font-mono">{addError}</p>
           )}
         </div>
 
-        {/* Bookmarks Table */}
-        <div className="bg-[#16162a] rounded-xl border border-white/10 overflow-hidden mb-8">
-          <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between flex-wrap gap-2">
-            <h2 className="text-lg font-semibold">
-              SELECT * FROM LEARNSPACE_BOOKMARKS ({bookmarks.length} rows)
+        {/* Bookmarks Table - query result style */}
+        <div className="bg-white/50 rounded-lg border border-neutral-300/80 overflow-hidden mb-8 shadow-sm">
+          <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between flex-wrap gap-2 bg-neutral-100/80">
+            <h2 className="font-mono text-sm font-semibold text-neutral-800">
+              <span className="text-[#e07850]">SELECT</span> * <span className="text-[#e07850]">FROM</span> LEARNSPACE_BOOKMARKS
+              <span className="text-neutral-500 font-normal"> ({bookmarks.length} rows)</span>
             </h2>
             <button
               onClick={handleClearAll}
               disabled={clearing || bookmarks.length === 0}
-              className="text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="font-mono text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {clearing ? 'Clearing…' : 'Clear all bookmarks'}
+              {clearing ? 'Clearing…' : 'Clear all'}
             </button>
           </div>
-          
+
           {loading ? (
-            <div className="p-8 text-center text-white/50">Loading...</div>
+            <div className="p-8 text-center text-neutral-500 font-mono text-sm">Loading...</div>
           ) : bookmarks.length === 0 ? (
-            <div className="p-8 text-center text-white/50 italic">
-              No rows yet. Add a bookmark above!
+            <div className="p-8 text-center text-neutral-500 font-mono text-sm italic">
+              No rows yet. Add a bookmark above.
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm font-mono">
                 <thead>
-                  <tr className="bg-white/5 text-white/70">
-                    <th className="px-4 py-3 text-left font-semibold">ID</th>
-                    <th className="px-4 py-3 text-left font-semibold">URL</th>
-                    <th className="px-4 py-3 text-left font-semibold">TITLE</th>
-                    <th className="px-4 py-3 text-left font-semibold">IR Status</th>
-                    <th className="px-4 py-3 text-left font-semibold">Actions</th>
+                  <tr className="bg-neutral-100 text-neutral-600 border-b border-neutral-200">
+                    <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider">ID</th>
+                    <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider">URL</th>
+                    <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider">TITLE</th>
+                    <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider">IR</th>
+                    <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {bookmarks.map((bookmark) => (
-                    <tr key={bookmark.ID} className="border-t border-white/5 hover:bg-white/5">
-                      <td className="px-4 py-3 text-white/60">{bookmark.ID}</td>
+                    <tr key={bookmark.ID} className="border-b border-neutral-100 hover:bg-neutral-50/80">
+                      <td className="px-4 py-3 text-neutral-500 text-xs tabular-nums">{bookmark.ID}</td>
                       <td className="px-4 py-3">
-                        <a 
-                          href={bookmark.URL} 
-                          target="_blank" 
+                        <a
+                          href={bookmark.URL}
+                          target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[#29b5e8] hover:underline truncate max-w-xs block"
+                          className="text-[#e07850] hover:underline truncate max-w-xs block text-xs"
                         >
                           {bookmark.URL}
                         </a>
                       </td>
-                      <td className="px-4 py-3 text-white/80 truncate max-w-xs">
+                      <td className="px-4 py-3 text-neutral-800 truncate max-w-xs text-xs">
                         {bookmark.TITLE || '—'}
                       </td>
                       <td className="px-4 py-3">
                         {irs[bookmark.ID] ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-green-400 text-xs">✓ Extracted</span>
+                            <span className="text-green-600 text-xs">✓</span>
                             <button
                               onClick={() => {
                                 const ir = irs[bookmark.ID];
                                 alert(`IR Summary:\n\n${ir.summary}\n\nTopics: ${ir.keyTopics.join(', ')}\n\nDifficulty: ${ir.difficulty}\nType: ${ir.contentType}`);
                               }}
-                              className="text-[#29b5e8] hover:underline text-xs"
+                              className="text-[#e07850] hover:underline text-xs"
                             >
                               View
                             </button>
                           </div>
                         ) : extractingIR[bookmark.ID] ? (
-                          <span className="text-yellow-400 text-xs animate-pulse">Extracting...</span>
+                          <span className="text-amber-600 text-xs animate-pulse">Extracting...</span>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <span className="text-yellow-400/70 text-xs animate-pulse">⏳ Processing...</span>
+                            <span className="text-neutral-400 text-xs animate-pulse">⏳</span>
                             <button
                               onClick={() => handleExtractIR(bookmark)}
-                              className="text-white/40 hover:text-[#29b5e8] text-xs"
+                              className="text-neutral-400 hover:text-[#e07850] text-xs"
                               title="Force re-extract"
                             >
                               ↻
@@ -726,10 +756,10 @@ export default function Dashboard() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 flex gap-2">
+                      <td className="px-4 py-3">
                         <button
                           onClick={() => handleDeleteBookmark(bookmark.URL)}
-                          className="text-red-400 hover:text-red-300 text-xs"
+                          className="text-red-600 hover:text-red-700 text-xs"
                         >
                           Delete
                         </button>
@@ -742,11 +772,11 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* User Content Preferences */}
-        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
+        {/* User Content Preferences - dev panel */}
+        <div className="bg-white/50 rounded-lg p-6 border border-neutral-300/80 mb-8 shadow-sm">
           <button
             onClick={() => setPreferencesOpen(!preferencesOpen)}
-            className="flex items-center gap-2 text-lg font-semibold text-[#29b5e8] hover:text-[#1e9fd4] w-full text-left"
+            className="flex items-center gap-2 font-mono text-sm font-semibold text-[#e07850] hover:brightness-110 w-full text-left uppercase tracking-wider"
           >
             {preferencesOpen ? '▼' : '▶'} Content preferences
           </button>
@@ -757,7 +787,7 @@ export default function Dashboard() {
             >
               {/* Learning style */}
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">
+                <label className="block text-sm font-medium text-neutral-700 mb-2">
                   {SURVEY_CONFIG.survey.learningStyle.question}
                 </label>
                 <div className="space-y-2">
@@ -766,8 +796,8 @@ export default function Dashboard() {
                       key={opt.id}
                       className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                         preferences.learningStyle === opt.id
-                          ? 'border-[#29b5e8] bg-[#29b5e8]/10'
-                          : 'border-white/20 bg-white/5 hover:border-white/30'
+                          ? 'border-[#e07850] bg-[#e07850]/10'
+                          : 'border-neutral-300 bg-white/60 hover:border-neutral-400'
                       }`}
                     >
                       <input
@@ -779,8 +809,8 @@ export default function Dashboard() {
                         className="mt-0.5"
                       />
                       <div>
-                        <span className="text-white font-medium">{opt.label}</span>
-                        <p className="text-white/60 text-xs mt-0.5">{opt.description}</p>
+                        <span className="text-neutral-900 font-medium">{opt.label}</span>
+                        <p className="text-neutral-600 text-xs mt-0.5">{opt.description}</p>
                       </div>
                     </label>
                   ))}
@@ -791,13 +821,13 @@ export default function Dashboard() {
               {preferences.learningStyle === 'verbal' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
                       {SURVEY_CONFIG.survey.verbal.textFormat.question}
                     </label>
                     <select
                       value={preferences.textFormat || 'bullet'}
                       onChange={e => setPreferences(p => ({ ...p, textFormat: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                      className="w-full bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850]"
                     >
                       {SURVEY_CONFIG.survey.verbal.textFormat.options.map(o => (
                         <option key={o.id} value={o.id}>{o.label}</option>
@@ -805,13 +835,13 @@ export default function Dashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
                       {SURVEY_CONFIG.survey.verbal.jargonLevel.question}
                     </label>
                     <select
                       value={preferences.jargonLevel || 'some'}
                       onChange={e => setPreferences(p => ({ ...p, jargonLevel: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                      className="w-full bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850]"
                     >
                       {SURVEY_CONFIG.survey.verbal.jargonLevel.options.map(o => (
                         <option key={o.id} value={o.id}>
@@ -821,11 +851,11 @@ export default function Dashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
                       {SURVEY_CONFIG.survey.verbal.interests.question}
                     </label>
                     {SURVEY_CONFIG.survey.verbal.interests.description && (
-                      <p className="text-white/60 text-xs mb-2">{SURVEY_CONFIG.survey.verbal.interests.description}</p>
+                      <p className="text-neutral-600 text-xs mb-2">{SURVEY_CONFIG.survey.verbal.interests.description}</p>
                     )}
                     <div className="flex flex-wrap gap-2">
                       {SURVEY_CONFIG.survey.verbal.interests.options.map(opt => (
@@ -834,9 +864,9 @@ export default function Dashboard() {
                             type="checkbox"
                             checked={(preferences.interests || []).includes(opt)}
                             onChange={() => toggleInterest(opt)}
-                            className="rounded border-white/30 bg-white/5 text-[#29b5e8] focus:ring-[#29b5e8]"
+                            className="rounded border-neutral-300 bg-neutral-100 text-[#e07850] focus:ring-[#e07850]"
                           />
-                          <span className="text-sm text-white/90">{opt}</span>
+                          <span className="text-sm text-neutral-900">{opt}</span>
                         </label>
                       ))}
                     </div>
@@ -846,7 +876,7 @@ export default function Dashboard() {
                         value={preferences.customInterests || ''}
                         onChange={e => setPreferences(p => ({ ...p, customInterests: e.target.value }))}
                         placeholder="Custom (e.g. Valorant, Cooking)"
-                        className="mt-2 w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8] text-sm"
+                        className="mt-2 w-full bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850] text-sm"
                       />
                     )}
                   </div>
@@ -857,13 +887,13 @@ export default function Dashboard() {
               {preferences.learningStyle === 'audio' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
                       {SURVEY_CONFIG.survey.audio.podcastLength.question}
                     </label>
                     <select
                       value={preferences.podcastLength || 'medium'}
                       onChange={e => setPreferences(p => ({ ...p, podcastLength: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                      className="w-full bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850]"
                     >
                       {SURVEY_CONFIG.survey.audio.podcastLength.options.map(o => (
                         <option key={o.id} value={o.id}>{o.label}</option>
@@ -871,13 +901,13 @@ export default function Dashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-white/80 mb-1">
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
                       {SURVEY_CONFIG.survey.audio.podcastStyle.question}
                     </label>
                     <select
                       value={preferences.podcastStyle || 'educational'}
                       onChange={e => setPreferences(p => ({ ...p, podcastStyle: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                      className="w-full bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850]"
                     >
                       {SURVEY_CONFIG.survey.audio.podcastStyle.options.map(o => (
                         <option key={o.id} value={o.id}>{o.label}</option>
@@ -889,16 +919,16 @@ export default function Dashboard() {
 
               {/* Background */}
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-1">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
                   {SURVEY_CONFIG.survey.background.question}
                 </label>
                 {SURVEY_CONFIG.survey.background.description && (
-                  <p className="text-white/60 text-xs mb-2">{SURVEY_CONFIG.survey.background.description}</p>
+                  <p className="text-neutral-600 text-xs mb-2">{SURVEY_CONFIG.survey.background.description}</p>
                 )}
                 <select
                   value={preferences.background}
                   onChange={e => setPreferences(p => ({ ...p, background: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                  className="w-full bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850]"
                 >
                   {SURVEY_CONFIG.survey.background.options.map(o => (
                     <option key={o.id} value={o.id}>{o.label}</option>
@@ -910,28 +940,28 @@ export default function Dashboard() {
                     onChange={e => setPreferences(p => ({ ...p, backgroundDetails: e.target.value }))}
                     placeholder={SURVEY_CONFIG.survey.background.detailsPlaceholder}
                     rows={2}
-                    className="mt-2 w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8] resize-y"
+                    className="mt-2 w-full bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850] resize-y"
                   />
                 )}
               </div>
 
               {/* Extra notes */}
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-1">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
                   {SURVEY_CONFIG.survey.extraNotes.question}
                   {SURVEY_CONFIG.survey.extraNotes.optional && (
-                    <span className="text-white/50 font-normal ml-1">(optional)</span>
+                    <span className="text-neutral-500 font-normal ml-1">(optional)</span>
                   )}
                 </label>
                 {SURVEY_CONFIG.survey.extraNotes.description && (
-                  <p className="text-white/60 text-xs mb-2">{SURVEY_CONFIG.survey.extraNotes.description}</p>
+                  <p className="text-neutral-600 text-xs mb-2">{SURVEY_CONFIG.survey.extraNotes.description}</p>
                 )}
                 <textarea
                   value={preferences.extraNotes || ''}
                   onChange={e => setPreferences(p => ({ ...p, extraNotes: e.target.value }))}
                   placeholder={SURVEY_CONFIG.survey.extraNotes.placeholder}
                   rows={2}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8] resize-y"
+                  className="w-full bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850] resize-y"
                 />
               </div>
 
@@ -939,29 +969,29 @@ export default function Dashboard() {
                 type="button"
                 onClick={handleGenerateContent}
                 disabled={contentLoading}
-                className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                className="bg-[#e07850] hover:bg-[#c96a40] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-none uppercase tracking-wider text-sm transition-all"
               >
                 {contentLoading ? 'Generating...' : 'Generate content'}
               </button>
 
               {contentError && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm">
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded text-red-600 text-sm">
                   {contentError}
                 </div>
               )}
 
               {generatedContent && (
-                <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-lg">
-                  <h3 className="text-sm font-medium text-[#29b5e8] mb-2">Generated content</h3>
-                  <div className="text-white/90 text-sm whitespace-pre-wrap font-sans max-h-96 overflow-y-auto">
+                <div className="mt-4 p-4 bg-neutral-100 border border-neutral-200 rounded-lg">
+                  <h3 className="text-sm font-medium text-[#e07850] mb-2">Generated content</h3>
+                  <div className="text-neutral-900 text-sm whitespace-pre-wrap font-sans max-h-96 overflow-y-auto">
                     {generatedContent}
                   </div>
                 </div>
               )}
 
               {generatedPodcastUrl && preferences.learningStyle === 'audio' && (
-                <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-lg">
-                  <h3 className="text-sm font-medium text-[#29b5e8] mb-2">Generated podcast</h3>
+                <div className="mt-4 p-4 bg-neutral-100 border border-neutral-200 rounded-lg">
+                  <h3 className="text-sm font-medium text-[#e07850] mb-2">Generated podcast</h3>
                   <audio src={generatedPodcastUrl} controls className="w-full max-w-md" />
                 </div>
               )}
@@ -970,18 +1000,18 @@ export default function Dashboard() {
         </div>
 
         {/* Learning Clusters */}
-        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
+        <div className="bg-white/50 rounded-lg border border-neutral-300/80 shadow-sm p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-[#29b5e8] mb-1">🧩 Learning Clusters</h2>
-              <p className="text-white/60 text-sm">
+              <h2 className="font-mono text-sm font-semibold text-[#e07850] uppercase tracking-wider mb-1">Learning Clusters</h2>
+              <p className="text-neutral-600 text-sm">
                 AI-generated groups of related content based on semantic similarity
               </p>
             </div>
             <button
               onClick={handleGenerateClusters}
               disabled={generatingClusters || Object.keys(irs).length < 1}
-              className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm"
+              className="bg-[#e07850] hover:bg-[#c96a40] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm"
               title={Object.keys(irs).length < 1 ? 'Add at least one bookmark and extract its IR first' : ''}
             >
               {generatingClusters ? 'Generating...' : clusters.length > 0 ? 'Regenerate Clusters' : 'Generate Clusters'}
@@ -989,35 +1019,35 @@ export default function Dashboard() {
           </div>
 
           {clusterError && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm">
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-600 text-sm">
               {clusterError}
             </div>
           )}
 
           {clusters.length === 0 ? (
-            <div className="text-center py-8 text-white/50 italic">
+            <div className="text-center py-8 text-neutral-500 italic">
               No clusters yet. Generate clusters from your IRs to see related content grouped together.
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {clusters.map((cluster) => (
-                <div key={cluster.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
+                <div key={cluster.id} className="bg-neutral-100 rounded-lg p-4 border border-neutral-300/80">
                   <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-white">{cluster.name}</h3>
-                    <span className="text-xs bg-[#29b5e8]/20 text-[#29b5e8] px-2 py-1 rounded">
+                    <h3 className="font-semibold text-neutral-800">{cluster.name}</h3>
+                    <span className="text-xs bg-[#e07850]/20 text-[#e07850] px-2 py-1 rounded">
                       {cluster.memberCount} {cluster.memberCount === 1 ? 'item' : 'items'}
                     </span>
                   </div>
-                  <p className="text-white/70 text-sm mb-3">{cluster.description}</p>
+                  <p className="text-neutral-600 text-sm mb-3">{cluster.description}</p>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {cluster.aggregatedTopics.slice(0, 5).map((topic, idx) => (
-                      <span key={idx} className="text-xs bg-white/10 text-white/80 px-2 py-1 rounded">
+                      <span key={idx} className="text-xs bg-neutral-200 text-neutral-700 px-2 py-1 rounded">
                         {topic}
                       </span>
                     ))}
                   </div>
-                  <div className="text-xs text-white/50">
-                    Difficulty: <span className="text-white/70">{cluster.avgDifficulty}</span>
+                  <div className="text-xs text-neutral-500">
+                    Difficulty: <span className="text-neutral-600">{cluster.avgDifficulty}</span>
                   </div>
                 </div>
               ))}
@@ -1026,45 +1056,45 @@ export default function Dashboard() {
         </div>
 
         {/* Content Generation (per cluster) */}
-        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
+        <div className="bg-white/50 rounded-lg border border-neutral-300/80 shadow-sm p-6 mb-8">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-[#29b5e8] mb-1">✨ Content Generation</h2>
-            <p className="text-white/60 text-sm">
+            <h2 className="font-mono text-sm font-semibold text-[#e07850] uppercase tracking-wider mb-1">Content Generation</h2>
+            <p className="text-neutral-600 text-sm">
               Generate personalized study content for each learning cluster. Uses your content preferences and references articles meaningfully.
             </p>
           </div>
 
           {clusters.length === 0 ? (
-            <div className="text-center py-8 text-white/50 italic">
+            <div className="text-center py-8 text-neutral-500 italic">
               Generate clusters first to create content for each group.
             </div>
           ) : (
             <div className="space-y-6">
               {clusters.map((cluster) => (
-                <div key={cluster.id} className="bg-white/5 rounded-lg p-5 border border-white/10">
+                <div key={cluster.id} className="bg-neutral-100 rounded-lg p-5 border border-neutral-300/80">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div>
-                      <h3 className="font-semibold text-white">{cluster.name}</h3>
-                      <p className="text-white/60 text-sm mt-0.5">{cluster.description}</p>
+                      <h3 className="font-semibold text-neutral-800">{cluster.name}</h3>
+                      <p className="text-neutral-600 text-sm mt-0.5">{cluster.description}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleGenerateClusterContent(cluster.id)}
                       disabled={clusterContentLoading[cluster.id]}
-                      className="shrink-0 bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                      className="shrink-0 bg-[#e07850] hover:bg-[#c96a40] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-none uppercase tracking-wider text-sm transition-all"
                     >
                       {clusterContentLoading[cluster.id] ? 'Generating…' : clusterContents[cluster.id] ? 'Regenerate' : 'Generate content'}
                     </button>
                   </div>
 
                   {clusterContentStatus[cluster.id] && !clusterContentError[cluster.id] && (
-                    <div className="mb-3 p-3 bg-[#29b5e8]/10 border border-[#29b5e8]/20 rounded text-[#29b5e8] text-sm">
+                    <div className="mb-3 p-3 bg-[#e07850]/10 border border-[#e07850]/20 rounded text-[#e07850] text-sm">
                       {clusterContentStatus[cluster.id]}
                     </div>
                   )}
 
                   {clusterContentError[cluster.id] && (
-                    <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm">
+                    <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-600 text-sm">
                       {clusterContentError[cluster.id]}
                     </div>
                   )}
@@ -1073,7 +1103,7 @@ export default function Dashboard() {
                     <div className="mt-4 space-y-3">
                       {clusterContents[cluster.id].podcastUrl ? (
                         <div>
-                          <h4 className="text-xs font-medium text-[#29b5e8] uppercase tracking-wider mb-2">Podcast</h4>
+                          <h4 className="text-xs font-medium text-[#e07850] uppercase tracking-wider mb-2">Podcast</h4>
                           <audio
                             src={clusterContents[cluster.id].podcastUrl}
                             controls
@@ -1081,15 +1111,15 @@ export default function Dashboard() {
                           />
                         </div>
                       ) : clusterContents[cluster.id].content ? (
-                        <div className="p-4 bg-black/20 rounded-lg border border-white/5">
-                          <div className="text-white/90 text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                        <div className="p-4 bg-neutral-100 rounded-lg border border-neutral-200">
+                          <div className="text-neutral-900 text-sm whitespace-pre-wrap font-sans leading-relaxed">
                             {clusterContents[cluster.id].content}
                           </div>
                         </div>
                       ) : null}
                       {clusterContents[cluster.id].sources.length > 0 && (
                         <div>
-                          <h4 className="text-xs font-medium text-[#29b5e8] uppercase tracking-wider mb-2">References</h4>
+                          <h4 className="text-xs font-medium text-[#e07850] uppercase tracking-wider mb-2">References</h4>
                           <ul className="space-y-1.5">
                             {clusterContents[cluster.id].sources.map((src, idx) => (
                               <li key={idx} className="text-sm">
@@ -1097,7 +1127,7 @@ export default function Dashboard() {
                                   href={src.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-[#29b5e8] hover:text-[#5dc9f0] hover:underline break-all"
+                                  className="text-[#e07850] hover:text-[#e89070] hover:underline break-all"
                                 >
                                   {src.title || src.url}
                                 </a>
@@ -1107,26 +1137,26 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      <div className="pt-3 border-t border-white/10 mt-3">
+                      <div className="pt-3 border-t border-neutral-200 mt-3">
                         <button
                           type="button"
                           onClick={() => handleGenerateClusterFlashcards(cluster.id)}
                           disabled={clusterFlashcardLoading[cluster.id]}
-                          className="text-sm bg-white/10 hover:bg-white/20 text-white/90 px-3 py-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-sm bg-neutral-200 hover:bg-neutral-300 text-neutral-900 px-3 py-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {clusterFlashcardLoading[cluster.id] ? 'Generating…' : clusterFlashcards[cluster.id] ? 'Regenerate flashcards' : 'Generate flashcards'}
                         </button>
                         {clusterFlashcardError[cluster.id] && (
-                          <p className="text-red-400 text-xs mt-2">{clusterFlashcardError[cluster.id]}</p>
+                          <p className="text-red-600 text-xs mt-2">{clusterFlashcardError[cluster.id]}</p>
                         )}
                         {clusterFlashcards[cluster.id]?.length > 0 && (
                           <div className="mt-3 space-y-2">
                             {clusterFlashcards[cluster.id].map((fc, idx) => (
-                              <details key={idx} className="bg-black/20 rounded-lg border border-white/5">
-                                <summary className="px-3 py-2 cursor-pointer text-sm text-white/90 hover:bg-white/5 rounded-lg">
+                              <details key={idx} className="bg-neutral-100 rounded-lg border border-neutral-200">
+                                <summary className="px-3 py-2 cursor-pointer text-sm text-neutral-900 hover:bg-neutral-100 rounded-lg">
                                   Q: {fc.question}
                                 </summary>
-                                <div className="px-3 py-2 text-sm text-white/70 border-t border-white/5">
+                                <div className="px-3 py-2 text-sm text-neutral-600 border-t border-neutral-200">
                                   A: {fc.answer}
                                 </div>
                               </details>
@@ -1143,22 +1173,22 @@ export default function Dashboard() {
         </div>
 
         {/* Podcast Generator */}
-        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10">
-          <h2 className="text-lg font-semibold text-[#29b5e8] mb-2">🎙️ Generate Podcast</h2>
-          <p className="text-white/60 text-sm mb-4">
+        <div className="bg-white/50 rounded-lg border border-neutral-300/80 shadow-sm p-6 mb-8">
+          <h2 className="font-mono text-sm font-semibold text-[#e07850] uppercase tracking-wider mb-2">Generate Podcast</h2>
+          <p className="text-neutral-600 text-sm mb-4">
             Turn your Learnspace bookmarks into a short podcast with Wondercraft AI (two hosts, Convo Mode).
           </p>
           
           <button
             onClick={generatePodcast}
             disabled={generating || bookmarks.length === 0}
-            className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
+            className="bg-[#e07850] hover:bg-[#c96a40] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
           >
             {generating ? 'Generating…' : 'Generate Podcast'}
           </button>
 
           {podcastStatus && (
-            <p className={`mt-3 text-sm ${podcastError ? 'text-red-400' : 'text-white/70'}`}>
+            <p className={`mt-3 text-sm ${podcastError ? 'text-red-600' : 'text-neutral-600'}`}>
               {podcastStatus}
             </p>
           )}
@@ -1175,34 +1205,34 @@ export default function Dashboard() {
         </div>
 
         {/* Gemini Chat */}
-        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10">
+        <div className="bg-white/50 rounded-lg border border-neutral-300/80 shadow-sm p-6">
           <button
             onClick={() => setChatOpen(!chatOpen)}
-            className="flex items-center gap-2 text-lg font-semibold text-[#29b5e8] hover:text-[#1e9fd4]"
+            className="flex items-center gap-2 font-mono text-sm font-semibold text-[#e07850] uppercase tracking-wider hover:brightness-110"
           >
             {chatOpen ? '▼' : '▶'} Gemini Chat (test API key)
           </button>
           {chatOpen && (
             <div className="mt-4">
-              <div className="h-48 overflow-y-auto rounded-lg bg-black/20 p-3 text-sm mb-3 space-y-2">
+              <div className="h-48 overflow-y-auto rounded-lg bg-neutral-200 p-3 font-mono text-sm mb-3 space-y-2">
                 {chatMessages.length === 0 ? (
-                  <p className="text-white/50">Say hello to test your Gemini API key.</p>
+                  <p className="text-neutral-500">Say hello to test your Gemini API key.</p>
                 ) : (
                   chatMessages.map((m, i) => (
                     <div
                       key={i}
                       className={m.role === 'user' ? 'text-right' : 'text-left'}
                     >
-                      <span className={m.role === 'user' ? 'text-[#29b5e8]' : 'text-white/90'}>
+                      <span className={m.role === 'user' ? 'text-[#e07850]' : 'text-neutral-900'}>
                         {m.role === 'user' ? 'You: ' : 'Gemini: '}
                       </span>
-                      <span className="text-white/80 whitespace-pre-wrap">{m.text}</span>
+                      <span className="text-neutral-700 whitespace-pre-wrap">{m.text}</span>
                     </div>
                   ))
                 )}
-                {chatLoading && <p className="text-white/50">Thinking…</p>}
+                {chatLoading && <p className="text-neutral-500">Thinking…</p>}
               </div>
-              {chatError && <p className="text-red-400 text-sm mb-2">{chatError}</p>}
+              {chatError && <p className="text-red-600 text-sm mb-2">{chatError}</p>}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -1211,12 +1241,12 @@ export default function Dashboard() {
                   onKeyDown={e => e.key === 'Enter' && handleChatSend()}
                   placeholder="Type a message..."
                   disabled={chatLoading}
-                  className="flex-1 bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8] disabled:opacity-50"
+                  className="flex-1 bg-white border border-neutral-300 rounded px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850] disabled:opacity-50"
                 />
                 <button
                   onClick={handleChatSend}
                   disabled={chatLoading || !chatInput.trim()}
-                  className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 text-white px-4 py-2 rounded-lg"
+                  className="bg-[#e07850] hover:bg-[#c96a40] disabled:opacity-50 text-white px-4 py-2 rounded-none uppercase tracking-wider font-mono text-sm"
                 >
                   Send
                 </button>
