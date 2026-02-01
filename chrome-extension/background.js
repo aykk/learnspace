@@ -125,6 +125,36 @@ chrome.runtime.onStartup.addListener(() => {
   ensureLearnspaceFolder();
 });
 
+// Sync Chrome bookmarks to match API (remove from Chrome any deleted on dashboard)
+async function syncChromeToApi(apiUrl) {
+  const folderId = await getLearnspaceFolderId();
+  if (!folderId) return;
+
+  try {
+    const res = await fetch(apiUrl || WEBAPP_URL);
+    const data = await res.json();
+    if (!Array.isArray(data)) return;
+    const apiUrls = new Set(data.map(b => b.URL));
+
+    const children = await chrome.bookmarks.getChildren(folderId);
+    for (const node of children) {
+      if (node.url && !apiUrls.has(node.url)) {
+        await chrome.bookmarks.remove(node.id);
+      }
+    }
+  } catch (err) {
+    console.error('Learnspace: Sync error', err);
+  }
+}
+
+// Listen for sync request from dashboard content script
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'syncChromeToApi') {
+    syncChromeToApi(msg.apiUrl).then(() => sendResponse({ ok: true })).catch(err => sendResponse({ ok: false, error: err.message }));
+    return true; // async response
+  }
+});
+
 // Listen for bookmark events
 chrome.bookmarks.onCreated.addListener(onBookmarkCreated);
 chrome.bookmarks.onMoved.addListener(onBookmarkMoved);

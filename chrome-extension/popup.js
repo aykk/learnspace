@@ -33,6 +33,7 @@ document.getElementById('add-btn').addEventListener('click', async () => {
       return;
     }
 
+    // Add to Chrome bookmarks — background listener sends to API
     await chrome.bookmarks.create({
       parentId: folderId,
       title: url,
