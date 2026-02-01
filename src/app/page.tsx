@@ -261,7 +261,7 @@ export default function Home() {
             
             {/* Subtitle */}
             <p className="text-center text-neutral-900/70 text-base md:text-lg font-[family-name:var(--font-body)] tracking-[0.25em] uppercase whitespace-nowrap -translate-y-[25px] fade-in-up delay-300">
-              Turn casual browsing into structured personal enrichment
+              Turn casual browsing into effortless learning
             </p>
             
             {/* CTA Button */}
