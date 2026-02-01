@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllClusters, getClusterById } from '@/lib/db';
+import { getAllClusters, getClusterById, deleteEmptyClusters } from '@/lib/db';
 
 /**
  * GET /api/clusters
@@ -22,10 +22,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ cluster: parseClusterRecord(cluster) });
     }
 
-    // Get all clusters
+    // Remove empty clusters from DB so they don't persist
+    await deleteEmptyClusters();
+
+    // Get all clusters (only non-empty after cleanup)
     const clusters = await getAllClusters();
+    const parsed = clusters.map(parseClusterRecord);
+
+    // Only return clusters with at least one member (safety filter)
+    const nonEmpty = parsed.filter(
+      (c) => (c.memberCount ?? 0) > 0 && (c.irIds?.length ?? 0) > 0
+    );
+
     return NextResponse.json({
-      clusters: clusters.map(parseClusterRecord),
+      clusters: nonEmpty,
     });
   } catch (error) {
     console.error('Get clusters error:', error);
