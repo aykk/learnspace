@@ -91,6 +91,50 @@ export default function Dashboard() {
   };
 
   const [clearing, setClearing] = useState(false);
+
+  // Chat state for Gemini
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
+
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+
+    const userMsg = chatInput.trim();
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setChatLoading(true);
+    setChatError('');
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMsg,
+          history: chatMessages
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setChatError(data.error || 'Failed to get response');
+        setChatMessages(prev => prev.slice(0, -1));
+        return;
+      }
+
+      setChatMessages(prev => [...prev, { role: 'model', text: data.text }]);
+    } catch (err) {
+      setChatError((err as Error).message || 'Request failed');
+      setChatMessages(prev => prev.slice(0, -1));
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   const handleClearAll = async () => {
     if (!confirm('Clear all bookmarks? This cannot be undone.')) return;
     setClearing(true);
@@ -318,6 +362,57 @@ export default function Dashboard() {
               className="mt-4 w-full max-w-md"
               onEnded={() => setPodcastStatus('Podcast finished.')}
             />
+          )}
+        </div>
+
+        {/* Gemini Chat */}
+        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10">
+          <button
+            onClick={() => setChatOpen(!chatOpen)}
+            className="flex items-center gap-2 text-lg font-semibold text-[#29b5e8] hover:text-[#1e9fd4]"
+          >
+            {chatOpen ? '▼' : '▶'} Gemini Chat (test API key)
+          </button>
+          {chatOpen && (
+            <div className="mt-4">
+              <div className="h-48 overflow-y-auto rounded-lg bg-black/20 p-3 text-sm mb-3 space-y-2">
+                {chatMessages.length === 0 ? (
+                  <p className="text-white/50">Say hello to test your Gemini API key.</p>
+                ) : (
+                  chatMessages.map((m, i) => (
+                    <div
+                      key={i}
+                      className={m.role === 'user' ? 'text-right' : 'text-left'}
+                    >
+                      <span className={m.role === 'user' ? 'text-[#29b5e8]' : 'text-white/90'}>
+                        {m.role === 'user' ? 'You: ' : 'Gemini: '}
+                      </span>
+                      <span className="text-white/80 whitespace-pre-wrap">{m.text}</span>
+                    </div>
+                  ))
+                )}
+                {chatLoading && <p className="text-white/50">Thinking…</p>}
+              </div>
+              {chatError && <p className="text-red-400 text-sm mb-2">{chatError}</p>}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleChatSend()}
+                  placeholder="Type a message..."
+                  disabled={chatLoading}
+                  className="flex-1 bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8] disabled:opacity-50"
+                />
+                <button
+                  onClick={handleChatSend}
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 text-white px-4 py-2 rounded-lg"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </main>
