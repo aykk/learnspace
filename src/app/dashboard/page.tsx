@@ -99,6 +99,13 @@ export default function Dashboard() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState('');
 
+  // Flashcard state
+  const [flashcards, setFlashcards] = useState<{ question: string; answer?: string; source?: string }[]>([]);
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [flashcardFlipped, setFlashcardFlipped] = useState(false);
+  const [flashcardLoading, setFlashcardLoading] = useState(false);
+  const [flashcardError, setFlashcardError] = useState('');
+
   const handleChatSend = async () => {
     if (!chatInput.trim() || chatLoading) return;
 
@@ -132,6 +139,24 @@ export default function Dashboard() {
       setChatMessages(prev => prev.slice(0, -1));
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const generateFlashcards = async () => {
+    setFlashcardLoading(true);
+    setFlashcardError('');
+    setFlashcards([]);
+    try {
+      const res = await fetch('/api/flashcards/generate', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate');
+      setFlashcards(data.flashcards || []);
+      setFlashcardIndex(0);
+      setFlashcardFlipped(false);
+    } catch (err) {
+      setFlashcardError((err as Error).message);
+    } finally {
+      setFlashcardLoading(false);
     }
   };
 
@@ -329,6 +354,64 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+
+        {/* Flashcard Generator */}
+        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
+          <h2 className="text-lg font-semibold text-[#29b5e8] mb-2">📚 Generate Flashcards</h2>
+          <p className="text-white/60 text-sm mb-4">
+            Create flashcards from your bookmarked articles using the Educational Flashcard API. Uses titles and keywords from your saved links.
+          </p>
+          <button
+            onClick={generateFlashcards}
+            disabled={flashcardLoading || bookmarks.length === 0}
+            className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
+          >
+            {flashcardLoading ? 'Generating…' : 'Generate Flashcards'}
+          </button>
+          {flashcardError && <p className="mt-3 text-sm text-red-400">{flashcardError}</p>}
+
+          {flashcards.length > 0 && (
+            <div className="mt-6">
+              <p className="text-white/60 text-sm mb-2">
+                {flashcardIndex + 1} / {flashcards.length}
+              </p>
+              <div
+                onClick={() => setFlashcardFlipped(!flashcardFlipped)}
+                className="relative h-32 cursor-pointer rounded-lg bg-white/5 border border-white/20 overflow-hidden"
+              >
+                <div className="absolute inset-0 p-4 flex items-center justify-center text-center">
+                  <p className="text-white/90 text-sm">
+                    {flashcardFlipped
+                      ? (flashcards[flashcardIndex]?.answer || 'No answer available')
+                      : flashcards[flashcardIndex]?.question}
+                  </p>
+                </div>
+                <p className="absolute bottom-2 left-2 right-2 text-[10px] text-white/40 truncate">
+                  {flashcards[flashcardIndex]?.source}
+                </p>
+                <p className="absolute top-2 right-2 text-[10px] text-white/40">
+                  {flashcardFlipped ? 'Answer' : 'Question'} — click to flip
+                </p>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => { setFlashcardIndex(i => Math.max(0, i - 1)); setFlashcardFlipped(false); }}
+                  disabled={flashcardIndex === 0}
+                  className="text-sm bg-white/10 hover:bg-white/20 disabled:opacity-50 px-3 py-1 rounded"
+                >
+                  ← Prev
+                </button>
+                <button
+                  onClick={() => { setFlashcardIndex(i => Math.min(flashcards.length - 1, i + 1)); setFlashcardFlipped(false); }}
+                  disabled={flashcardIndex === flashcards.length - 1}
+                  className="text-sm bg-white/10 hover:bg-white/20 disabled:opacity-50 px-3 py-1 rounded"
+                >
+                  Next →
+                </button>
+              </div>
             </div>
           )}
         </div>
