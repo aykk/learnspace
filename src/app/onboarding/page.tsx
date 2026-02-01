@@ -69,7 +69,12 @@ export default function Onboarding() {
         if (data.learningStyle === "audio") return data.podcastStyle !== undefined;
         return false;
       case 4:
-        if (data.learningStyle === "verbal") return (data.interests?.length || 0) > 0;
+        if (data.learningStyle === "verbal") {
+          // Allow proceeding if they have preset interests OR custom interests
+          const hasPresetInterests = (data.interests?.length || 0) > 0;
+          const hasCustomInterests = data.customInterests?.trim().length > 0;
+          return hasPresetInterests || hasCustomInterests;
+        }
         if (data.learningStyle === "audio") return data.background !== undefined;
         return false;
       case 5:
@@ -540,11 +545,11 @@ export default function Onboarding() {
               <h1 className="text-4xl md:text-5xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-4">
                 What are your interests<span style={{ color: "#e07850" }}>?</span>
               </h1>
-              <p className="text-neutral-900/60 text-lg font-[family-name:var(--font-body)] mb-12">
-                We&apos;ll use these for analogies and examples. Select all that apply.
+              <p className="text-neutral-900/60 text-lg font-[family-name:var(--font-body)] mb-8">
+                We&apos;ll use these for analogies and examples. Select from the options below or add your own.
               </p>
               
-              <div className="flex flex-wrap justify-center gap-3 mb-8">
+              <div className="flex flex-wrap justify-center gap-3 mb-6">
                 {interestOptions.map(interest => (
                   <button
                     key={interest}
@@ -563,13 +568,18 @@ export default function Onboarding() {
                 ))}
               </div>
 
-              <input
-                type="text"
-                placeholder="Other interests (comma separated)"
-                value={data.customInterests || ""}
-                onChange={(e) => setData({ ...data, customInterests: e.target.value })}
-                className="w-full max-w-md px-4 py-3 bg-white/60 border-2 border-transparent focus:border-[#e07850] outline-none rounded-sm text-neutral-900 font-[family-name:var(--font-body)] placeholder:text-neutral-500"
-              />
+              <div className="w-full max-w-md mx-auto">
+                <p className="text-sm text-neutral-600 font-[family-name:var(--font-body)] mb-2 text-center">
+                  Or add your own interests (comma separated)
+                </p>
+                <input
+                  type="text"
+                  placeholder="e.g., Photography, Chess, Astronomy"
+                  value={data.customInterests || ""}
+                  onChange={(e) => setData({ ...data, customInterests: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/60 border-2 border-transparent focus:border-[#e07850] outline-none rounded-sm text-neutral-900 font-[family-name:var(--font-body)] placeholder:text-neutral-500"
+                />
+              </div>
             </div>
           )}
 

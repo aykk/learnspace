@@ -179,9 +179,9 @@ export default function Dashboard() {
     // Simple markdown to HTML conversion
     let html = content
       // Code blocks first (to avoid processing markdown inside them)
-      .replace(/```([\s\S]*?)```/g, '<pre class="bg-neutral-100 p-4 rounded-sm overflow-x-auto my-4 font-mono text-sm"><code>$1</code></pre>')
+      .replace(/```([\s\S]*?)```/g, '<pre class="bg-neutral-100 p-4 rounded-sm overflow-x-auto my-4 font-mono text-sm break-words whitespace-pre-wrap" style="word-break: break-word; overflow-wrap: anywhere;"><code class="break-words">$1</code></pre>')
       // Inline code
-      .replace(/`([^`]+)`/g, '<code class="bg-neutral-100 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
+      .replace(/`([^`]+)`/g, '<code class="bg-neutral-100 px-1.5 py-0.5 rounded text-sm font-mono break-words" style="word-break: break-word;">$1</code>')
       // Headers
       .replace(/^### (.*$)/gim, '<h3 class="text-xl font-semibold text-neutral-900 mt-6 mb-3 font-[family-name:var(--font-display)]">$1</h3>')
       .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-semibold text-neutral-900 mt-8 mb-4 font-[family-name:var(--font-display)]">$1</h2>')
@@ -1254,23 +1254,24 @@ export default function Dashboard() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-neutral-200">
-              <h2 className="text-2xl font-semibold text-neutral-900 font-[family-name:var(--font-display)]">
+            <div className="flex items-center justify-between p-6 border-b border-neutral-200 flex-shrink-0">
+              <h2 className="text-2xl font-semibold text-neutral-900 font-[family-name:var(--font-display)] truncate pr-4">
                 {contentWindowCluster.name}
               </h2>
               <button 
                 onClick={() => setContentWindowOpen(false)}
-                className="text-neutral-500 hover:text-neutral-900 text-2xl"
+                className="text-neutral-500 hover:text-neutral-900 text-2xl flex-shrink-0"
               >
                 ×
               </button>
             </div>
             
             {/* Content */}
-            <div className="p-6 h-[calc(85vh-80px)] overflow-y-auto">
+            <div className="p-6 h-[calc(85vh-80px)] overflow-y-auto overflow-x-hidden">
               {contentWindowCluster.generatedContent?.content && (
                 <div 
-                  className="prose max-w-none font-[family-name:var(--font-body)]"
+                  className="prose max-w-none font-[family-name:var(--font-body)] break-words overflow-wrap-anywhere"
+                  style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   dangerouslySetInnerHTML={{ __html: renderMarkdownWithJargon(contentWindowCluster.generatedContent.content) }} 
                 />
               )}
@@ -1295,7 +1296,8 @@ export default function Dashboard() {
                         href={source.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block text-sm text-[#e07850] hover:underline font-[family-name:var(--font-body)]"
+                        className="block text-sm text-[#e07850] hover:underline font-[family-name:var(--font-body)] break-words overflow-wrap-anywhere"
+                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                       >
                         {source.title || source.url}
                       </a>
