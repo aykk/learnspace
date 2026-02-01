@@ -56,6 +56,8 @@ const getFloatAnimation = (index: number) => {
 };
 
 const CLUSTER_POSITIONS_KEY = 'learnspace_cluster_positions';
+const CLUSTER_CONTENT_KEY = 'learnspace_cluster_content';
+const CLUSTER_FLASHCARDS_KEY = 'learnspace_cluster_flashcards';
 
 const MIN_DIST_PCT = 16; // min % distance between cluster centers so they don't overlap
 const CENTER_SPREAD = 10; // max % from center (50) — clusters spawn in center of grid
@@ -164,6 +166,9 @@ export default function Dashboard() {
   const [contentWindowCluster, setContentWindowCluster] = useState<Cluster | null>(null);
   const [flashcardWindowOpen, setFlashcardWindowOpen] = useState(false);
   const [flashcardWindowCluster, setFlashcardWindowCluster] = useState<Cluster | null>(null);
+  const [flippedFlashcardIndices, setFlippedFlashcardIndices] = useState<Set<number>>(new Set());
+  const [currentFlashcardIndex, setCurrentFlashcardIndex] = useState(0);
+  const [flashcardSlideDirection, setFlashcardSlideDirection] = useState<'left' | 'right' | null>(null);
   const [selectedJargon, setSelectedJargon] = useState<string | null>(null);
   const [jargonDefinition, setJargonDefinition] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -407,8 +412,22 @@ export default function Dashboard() {
           localStorage.setItem(CLUSTER_POSITIONS_KEY, JSON.stringify(pruned));
         } catch { /* ignore */ }
       }
+
+      // Restore persisted generated content (text or podcast) so we don't call the API again
+      let withPersistedContent = clustersToShow;
+      if (typeof window !== 'undefined') {
+        try {
+          const saved = localStorage.getItem(CLUSTER_CONTENT_KEY);
+          const parsed: Record<string, { content?: string; podcastUrl?: string; sources?: { title: string; url: string }[] }> = saved ? JSON.parse(saved) : {};
+          withPersistedContent = clustersToShow.map((c) => {
+            const content = parsed[c.id];
+            if (content && (content.content || content.podcastUrl)) return { ...c, generatedContent: content };
+            return c;
+          });
+        } catch { /* ignore */ }
+      }
       
-      setClusters(clustersToShow);
+      setClusters(withPersistedContent);
     } catch (error) {
       console.error('Error loading clusters:', error);
     }
@@ -418,6 +437,14 @@ export default function Dashboard() {
   useEffect(() => {
     loadClusters();
   }, [loadClusters]);
+
+  // Clear flashcard slide direction after animation so it doesn't re-run on re-render
+  useEffect(() => {
+    if (flashcardSlideDirection) {
+      const t = setTimeout(() => setFlashcardSlideDirection(null), 400);
+      return () => clearTimeout(t);
+    }
+  }, [flashcardSlideDirection, currentFlashcardIndex]);
 
   // Refresh: re-cluster based on all existing IRs (IRs are extracted when bookmarks are added)
   const handleRefresh = async () => {
@@ -465,12 +492,19 @@ export default function Dashboard() {
       return;
     }
 
+    // Don't call the API again if we already have generated content (text or podcast)
+    const cluster = clusters.find(c => c.id === clusterId);
+    if (cluster?.generatedContent?.content || cluster?.generatedContent?.podcastUrl) {
+      setContentLoading(false);
+      return;
+    }
+
     setContentLoading(true);
     setContentStatus('');
 
     try {
       if (preferences.learningStyle === 'audio') {
-        // Generate podcast
+        // Generate podcast — API sends named SSE events: status, done, error
         const params = new URLSearchParams({
           clusterId,
           preferences: JSON.stringify(preferences),
@@ -478,16 +512,16 @@ export default function Dashboard() {
         
         const eventSource = new EventSource(`/api/podcast/generate?${params}`);
         
-        eventSource.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          
-          if (data.status) {
-            setContentStatus(data.status);
-          }
-          
-          if (data.done) {
-            // Update cluster with podcast URL and sources
-            const updatedCluster = { ...clusters.find(c => c.id === clusterId)! };
+        eventSource.addEventListener('status', (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.msg) setContentStatus(data.msg);
+          } catch { /* ignore */ }
+        });
+        
+        eventSource.addEventListener('done', (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data);
             updateCluster(clusterId, {
               generatedContent: {
                 podcastUrl: data.url,
@@ -497,15 +531,23 @@ export default function Dashboard() {
             setContentStatus('Podcast ready!');
             eventSource.close();
             setContentLoading(false);
-          }
-          
-          if (data.error) {
-            console.error('Podcast generation error:', data.error);
-            setContentStatus(`Error: ${data.error}`);
+          } catch (e) {
+            console.error('Podcast done parse error', e);
             eventSource.close();
             setContentLoading(false);
           }
-        };
+        });
+        
+        eventSource.addEventListener('error', (event: MessageEvent) => {
+          try {
+            const data = (event as MessageEvent).data != null ? JSON.parse((event as MessageEvent).data) : {};
+            setContentStatus(data.error ? `Error: ${data.error}` : 'Connection error');
+          } catch {
+            setContentStatus('Connection error');
+          }
+          eventSource.close();
+          setContentLoading(false);
+        });
         
         eventSource.onerror = () => {
           eventSource.close();
@@ -551,6 +593,15 @@ export default function Dashboard() {
 
   // Generate flashcards for a cluster
   const handleGenerateFlashcards = async (clusterId: string) => {
+    const cluster = clusters.find(c => c.id === clusterId);
+    // Don't call the API again if we already have flashcards (from state or persisted)
+    if (cluster?.flashcards && cluster.flashcards.length > 0) {
+      setFlippedFlashcardIndices(new Set());
+      setFlashcardWindowCluster(cluster);
+      setFlashcardWindowOpen(true);
+      return;
+    }
+
     setFlashcardLoading(true);
     try {
       const response = await fetch('/api/flashcards/generate', {
@@ -561,11 +612,29 @@ export default function Dashboard() {
 
       if (!response.ok) throw new Error('Failed to generate flashcards');
       
-      const flashcards: Flashcard[] = await response.json();
-      
-      // Update cluster with flashcards
+      const data = await response.json();
+      const raw = data.flashcards || [];
+      // API returns { question, answer, source }; normalize to { front, back, source }
+      const flashcards: Flashcard[] = raw.map((fc: { question?: string; answer?: string; source?: string }) => ({
+        front: fc.question ?? fc.front ?? '',
+        back: fc.answer ?? fc.back ?? '',
+        source: fc.source,
+      })).filter((fc: Flashcard) => fc.front && fc.back);
+
+      const cluster = clusters.find(c => c.id === clusterId);
+      const clusterWithFlashcards = cluster ? { ...cluster, flashcards } : null;
+
       updateCluster(clusterId, { flashcards });
-      
+
+      // Open flashcard window with the new data (same behavior as View Content)
+      if (clusterWithFlashcards && flashcards.length > 0) {
+        setFlippedFlashcardIndices(new Set());
+        setCurrentFlashcardIndex(0);
+        setFlashcardSlideDirection(null);
+        setFlashcardWindowCluster(clusterWithFlashcards);
+        setFlashcardWindowOpen(true);
+      }
+
       setFlashcardLoading(false);
     } catch (error) {
       console.error('Flashcard generation error:', error);
@@ -591,7 +660,29 @@ export default function Dashboard() {
     if (selectedCluster?.id === clusterId) {
       setSelectedCluster(prev => prev ? { ...prev, ...updates } : null);
     }
-  }, [selectedCluster]);
+    // Keep content window in sync so podcast/text shows immediately if that cluster is open
+    if (contentWindowCluster?.id === clusterId) {
+      setContentWindowCluster(prev => prev ? { ...prev, ...updates } : null);
+    }
+    // Persist generated content so we don't call the API again after refresh
+    if (updates.generatedContent && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(CLUSTER_CONTENT_KEY);
+        const all: Record<string, { content?: string; podcastUrl?: string; sources?: { title: string; url: string }[] }> = raw ? JSON.parse(raw) : {};
+        all[clusterId] = updates.generatedContent;
+        localStorage.setItem(CLUSTER_CONTENT_KEY, JSON.stringify(all));
+      } catch { /* ignore */ }
+    }
+    // Persist flashcards so we don't call the API again after refresh
+    if (updates.flashcards && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(CLUSTER_FLASHCARDS_KEY);
+        const all: Record<string, { front: string; back: string; source?: string }[]> = raw ? JSON.parse(raw) : {};
+        all[clusterId] = updates.flashcards;
+        localStorage.setItem(CLUSTER_FLASHCARDS_KEY, JSON.stringify(all));
+      } catch { /* ignore */ }
+    }
+  }, [selectedCluster, contentWindowCluster]);
 
   // Toggle read status
   const toggleRead = (clusterId: string) => {
@@ -1263,6 +1354,9 @@ export default function Dashboard() {
               ) : (
                 <button 
                   onClick={() => {
+                    setFlippedFlashcardIndices(new Set());
+                    setCurrentFlashcardIndex(0);
+                    setFlashcardSlideDirection(null);
                     setFlashcardWindowCluster(selectedCluster);
                     setFlashcardWindowOpen(true);
                   }}
@@ -1349,7 +1443,7 @@ export default function Dashboard() {
       )}
 
       {/* Flashcard Window */}
-      {flashcardWindowOpen && flashcardWindowCluster && flashcardWindowCluster.flashcards && (
+      {flashcardWindowOpen && flashcardWindowCluster && Array.isArray(flashcardWindowCluster.flashcards) && flashcardWindowCluster.flashcards.length > 0 && (
         <div 
           className="fixed inset-0 z-[100] flex items-center justify-center"
           onClick={() => setFlashcardWindowOpen(false)}
@@ -1359,11 +1453,11 @@ export default function Dashboard() {
           
           {/* Flashcard Window */}
           <div 
-            className="relative w-[90vw] max-w-4xl h-[85vh] bg-white rounded-lg shadow-2xl overflow-hidden"
+            className="relative flex flex-col w-[90vw] max-w-4xl h-[85vh] bg-white rounded-lg shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-neutral-200">
+            <div className="flex shrink-0 items-center justify-between p-6 border-b border-neutral-200">
               <h2 className="text-2xl font-semibold text-neutral-900 font-[family-name:var(--font-display)]">
                 {flashcardWindowCluster.name} - Flashcards
               </h2>
@@ -1375,39 +1469,119 @@ export default function Dashboard() {
               </button>
             </div>
             
-            {/* Flashcards */}
-            <div className="p-6 h-[calc(85vh-80px)] overflow-y-auto">
-              <div className="space-y-4">
-                {flashcardWindowCluster.flashcards.map((card, idx) => (
-                  <div 
-                    key={idx}
-                    className="bg-white/80 border border-neutral-200 rounded-lg p-6 hover:shadow-lg transition-shadow"
-                  >
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider font-[family-name:var(--font-body)]">
-                          Question {idx + 1}
-                        </span>
-                        {card.source && (
-                          <span className="text-xs text-neutral-400 font-[family-name:var(--font-body)]">
-                            • {card.source}
+            {/* Flashcards - one at a time with left/right arrows like Quizlet */}
+            <div className="flex flex-1 flex-col h-[calc(85vh-80px)] min-h-0">
+              <div className="flex flex-1 items-center justify-center gap-4 px-4 py-6">
+                {/* Left arrow - greyed out on first card */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFlashcardSlideDirection('left');
+                    setCurrentFlashcardIndex(i => Math.max(0, i - 1));
+                  }}
+                  disabled={currentFlashcardIndex === 0}
+                  className="shrink-0 p-3 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent hover:bg-neutral-100 text-neutral-700 disabled:text-neutral-400"
+                  aria-label="Previous card"
+                >
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+
+                {/* Single card - click to flip; slides in from left/right when changing */}
+                <div className="flex-1 max-w-2xl w-full min-h-[240px] overflow-hidden flex items-center justify-center">
+                {(() => {
+                  const cards = flashcardWindowCluster.flashcards ?? [];
+                  const idx = Math.min(currentFlashcardIndex, cards.length - 1);
+                  const card = cards[idx];
+                  if (!card) return null;
+                  const isFlipped = flippedFlashcardIndices.has(idx);
+                  const toggleFlip = () => {
+                    setFlippedFlashcardIndices(prev => {
+                      const next = new Set(prev);
+                      if (next.has(idx)) next.delete(idx);
+                      else next.add(idx);
+                      return next;
+                    });
+                  };
+                  const slideClass = flashcardSlideDirection === 'right' ? 'flashcard-enter-right' : flashcardSlideDirection === 'left' ? 'flashcard-enter-left' : '';
+                  return (
+                    <div
+                      key={currentFlashcardIndex}
+                      className={`w-full cursor-pointer select-none min-h-[240px] ${slideClass}`}
+                      style={{ perspective: '1000px' }}
+                      onClick={toggleFlip}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFlip(); } }}
+                      aria-label={isFlipped ? 'Show question' : 'Show answer'}
+                    >
+                      <div
+                        className="relative w-full h-full min-h-[240px] max-h-[50vh] transition-transform duration-500 ease-in-out"
+                        style={{
+                          transformStyle: 'preserve-3d',
+                          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                        }}
+                      >
+                        {/* Front - Question */}
+                        <div
+                          className="absolute inset-0 rounded-xl border border-neutral-200 bg-white shadow-lg flex flex-col p-6 overflow-hidden"
+                          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+                        >
+                          <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider font-[family-name:var(--font-body)] mb-2 shrink-0">
+                            Question {idx + 1}
+                            {card.source && <span className="text-neutral-400 ml-1">• {card.source}</span>}
                           </span>
-                        )}
+                          <div className="flex-1 min-h-0 overflow-y-auto">
+                            <p className="text-base font-semibold text-neutral-900 font-[family-name:var(--font-display)] break-words">
+                              {card.front}
+                            </p>
+                          </div>
+                          <p className="text-xs text-neutral-400 mt-2 shrink-0 font-[family-name:var(--font-body)]">Click to flip</p>
+                        </div>
+                        {/* Back - Answer */}
+                        <div
+                          className="absolute inset-0 rounded-xl border border-[#e07850]/30 bg-[#fef8f6] shadow-lg flex flex-col p-6 overflow-hidden"
+                          style={{
+                            backfaceVisibility: 'hidden',
+                            WebkitBackfaceVisibility: 'hidden',
+                            transform: 'rotateY(180deg)',
+                          }}
+                        >
+                          <span className="text-xs font-semibold text-[#e07850] uppercase tracking-wider mb-2 shrink-0 font-[family-name:var(--font-body)]">
+                            Answer
+                          </span>
+                          <div className="flex-1 min-h-0 overflow-y-auto">
+                            <p className="text-base text-neutral-800 leading-relaxed font-[family-name:var(--font-body)] break-words">
+                              {card.back}
+                            </p>
+                          </div>
+                          <p className="text-xs text-neutral-400 mt-2 shrink-0 font-[family-name:var(--font-body)]">Click to flip back</p>
+                        </div>
                       </div>
-                      <p className="text-lg font-semibold text-neutral-900 font-[family-name:var(--font-display)] mb-3">
-                        {card.front}
-                      </p>
                     </div>
-                    <div className="pt-4 border-t border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2 block font-[family-name:var(--font-body)]">
-                        Answer
-                      </span>
-                      <p className="text-base text-neutral-700 leading-relaxed font-[family-name:var(--font-body)]">
-                        {card.back}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })()}
+                </div>
+
+                {/* Right arrow - greyed out on last card */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFlashcardSlideDirection('right');
+                    setCurrentFlashcardIndex(i => Math.min((flashcardWindowCluster.flashcards?.length ?? 1) - 1, i + 1));
+                  }}
+                  disabled={currentFlashcardIndex >= (flashcardWindowCluster.flashcards?.length ?? 1) - 1}
+                  className="shrink-0 p-3 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent hover:bg-neutral-100 text-neutral-700 disabled:text-neutral-400"
+                  aria-label="Next card"
+                >
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+              <div className="text-center pb-4 text-sm text-neutral-500 font-[family-name:var(--font-body)]">
+                Card {currentFlashcardIndex + 1} of {flashcardWindowCluster.flashcards?.length ?? 0}
               </div>
             </div>
           </div>
