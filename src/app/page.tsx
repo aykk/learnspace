@@ -183,23 +183,6 @@ export default function Home() {
             }}
           />
 
-          {/* Large asymmetrical translucent logo - fade out on scroll */}
-          <div 
-            className="absolute top-[60%] -translate-y-1/2 left-[1vw] z-10 pointer-events-none"
-            style={{
-              opacity: 0.1 * (1 - phase1Progress),
-            }}
-          >
-            <img
-              src="/learnspacelogo.svg"
-              alt=""
-              className="w-[70vw] h-[70vw] md:w-[55vw] md:h-[55vw]"
-              style={{
-                transform: "rotate(12deg)",
-                filter: "sepia(100%) saturate(300%) hue-rotate(-10deg) brightness(0.9)",
-              }}
-            />
-          </div>
 
 
           {/* ===== TRADITIONAL TOP NAVBAR ===== */}
@@ -230,6 +213,24 @@ export default function Home() {
             </div>
           </nav>
 
+
+          {/* Large asymmetrical translucent logo - fade out on scroll */}
+          <div 
+            className="absolute top-[60%] -translate-y-1/2 left-[1vw] z-10 pointer-events-none"
+            style={{
+              opacity: 0.1 * (1 - phase1Progress),
+            }}
+          >
+            <img
+              src="/learnspacelogo.svg"
+              alt=""
+              className="w-[70vw] h-[70vw] md:w-[55vw] md:h-[55vw]"
+              style={{
+                transform: "rotate(12deg)",
+                filter: "sepia(100%) saturate(300%) hue-rotate(-10deg) brightness(0.9)",
+              }}
+            />
+          </div>
 
           {/* Hero Content Container */}
           <div className="absolute bottom-[12vh] left-0 right-0 z-30 flex flex-col items-center justify-center gap-6">
@@ -382,7 +383,7 @@ export default function Home() {
         </section>
 
         {/* SECTION 3: FEATURES */}
-        <section id="features" className="relative min-h-[100vh] w-full flex items-center justify-center py-24">
+        <section id="features" className="relative h-[100vh] w-full flex items-center justify-center py-12">
           {/* Background continuity */}
           <div className="absolute inset-0 bg-[#d0d0d0]" />
           
@@ -402,18 +403,18 @@ export default function Home() {
               </h2>
               <span className="mt-3 w-12 h-[3px]" style={{ backgroundColor: "#e07850" }} />
             </div>
-            <p className="text-lg md:text-xl text-neutral-900/60 font-[family-name:var(--font-body)] leading-relaxed mb-16 text-center max-w-2xl mx-auto">
+            <p className="text-lg md:text-xl text-neutral-900/60 font-[family-name:var(--font-body)] leading-relaxed mb-8 text-center max-w-2xl mx-auto">
               Everything you need to transform your learning journey
             </p>
             
             {/* Features Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {/* Feature 1 */}
-              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
                   ◎
                 </div>
-                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
                   Smart Organization
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
@@ -422,11 +423,11 @@ export default function Home() {
               </div>
 
               {/* Feature 2 */}
-              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
                   ⬡
                 </div>
-                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
                   Visual Mapping
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
@@ -435,11 +436,11 @@ export default function Home() {
               </div>
 
               {/* Feature 3 */}
-              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
                   ◈
                 </div>
-                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
                   Collaborative Spaces
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
@@ -448,11 +449,11 @@ export default function Home() {
               </div>
 
               {/* Feature 4 */}
-              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
                   ✧
                 </div>
-                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
                   AI-Powered Insights
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
@@ -461,11 +462,11 @@ export default function Home() {
               </div>
 
               {/* Feature 5 */}
-              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
                   ⊕
                 </div>
-                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
                   Universal Import
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
@@ -474,11 +475,11 @@ export default function Home() {
               </div>
 
               {/* Feature 6 */}
-              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
-                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+              <div className="group p-4 md:p-6 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-10 h-10 mb-3 md:mb-4 flex items-center justify-center text-2xl md:text-3xl" style={{ color: "#e07850" }}>
                   ◇
                 </div>
-                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                <h3 className="text-lg md:text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
                   Focused Learning
                 </h3>
                 <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">

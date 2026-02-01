@@ -33,6 +33,7 @@ const interestOptions = [
 
 export default function Onboarding() {
   const [step, setStep] = useState(1);
+  const [surveyComplete, setSurveyComplete] = useState(false);
   const [data, setData] = useState<SurveyData>({
     learningStyle: null,
     interests: [],
@@ -44,10 +45,10 @@ export default function Onboarding() {
     if (step < totalSteps) {
       setStep(step + 1);
     } else {
-      // Final step - export to console
+      // Final step - save to console and show setup instructions
       console.log("=== ONBOARDING SURVEY RESULTS ===");
       console.log(JSON.stringify(data, null, 2));
-      alert("Survey complete! Check the console for your responses.");
+      setSurveyComplete(true);
     }
   };
 
@@ -180,7 +181,7 @@ export default function Onboarding() {
           Learnspace<span style={{ color: "#e07850" }}>.</span>
         </Link>
         <div className="text-neutral-900/60 text-sm font-[family-name:var(--font-body)]">
-          Step {step} of {totalSteps}
+          {surveyComplete ? "Setup" : `Step ${step} of ${totalSteps}`}
         </div>
       </header>
 
@@ -190,7 +191,7 @@ export default function Onboarding() {
           <div 
             className="h-full transition-all duration-500 ease-out"
             style={{ 
-              width: `${(step / totalSteps) * 100}%`,
+              width: surveyComplete ? "100%" : `${(step / totalSteps) * 100}%`,
               backgroundColor: "#e07850" 
             }}
           />
@@ -199,6 +200,129 @@ export default function Onboarding() {
 
       {/* Main content */}
       <main className="relative z-30 flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-8 py-12">
+        
+        {/* Survey Complete - Setup Instructions */}
+        {surveyComplete && (
+          <div className="max-w-3xl w-full text-center">
+            <div className="mb-8">
+              <span className="text-5xl" style={{ color: "#e07850" }}>✓</span>
+            </div>
+            
+            <h1 className="text-4xl md:text-5xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-4">
+              Thanks for completing the survey<span style={{ color: "#e07850" }}>!</span>
+            </h1>
+            <p className="text-neutral-900/60 text-lg font-[family-name:var(--font-body)] mb-12">
+              Let&apos;s get your Learnspace set up.
+            </p>
+
+            {/* Setup Steps */}
+            <div className="space-y-6 text-left max-w-xl mx-auto">
+              {/* Step 1 */}
+              <div className="flex gap-4 items-start p-5 bg-white/40 backdrop-blur-sm rounded-sm">
+                <div 
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold font-[family-name:var(--font-display)]"
+                  style={{ backgroundColor: "#e07850" }}
+                >
+                  1
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-1">
+                    Download the Extension
+                  </h3>
+                  <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm">
+                    Install the &quot;Learnspace&quot; extension from the Chrome Web Store.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="flex gap-4 items-start p-5 bg-white/40 backdrop-blur-sm rounded-sm">
+                <div 
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold font-[family-name:var(--font-display)]"
+                  style={{ backgroundColor: "#e07850" }}
+                >
+                  2
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-1">
+                    Create a Bookmark Folder
+                  </h3>
+                  <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm">
+                    In your Bookmarks Bar, create a folder called <span className="font-semibold text-neutral-900/80">&quot;Learnspace&quot;</span> or <span className="font-semibold text-neutral-900/80">&quot;learnspace&quot;</span>.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="flex gap-4 items-start p-5 bg-white/40 backdrop-blur-sm rounded-sm">
+                <div 
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold font-[family-name:var(--font-display)]"
+                  style={{ backgroundColor: "#e07850" }}
+                >
+                  3
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-1">
+                    Bookmark What Interests You
+                  </h3>
+                  <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm">
+                    Whenever you see something interesting or want to learn more about, bookmark it to your Learnspace folder.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="flex gap-4 items-start p-5 bg-white/40 backdrop-blur-sm rounded-sm">
+                <div 
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold font-[family-name:var(--font-display)]"
+                  style={{ backgroundColor: "#e07850" }}
+                >
+                  4
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-1">
+                    Sync Your Bookmarks
+                  </h3>
+                  <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm">
+                    Head to your Learnspace dashboard and click &quot;Refresh bookmarks&quot; to import your saved links.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 5 */}
+              <div className="flex gap-4 items-start p-5 bg-white/40 backdrop-blur-sm rounded-sm">
+                <div 
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold font-[family-name:var(--font-display)]"
+                  style={{ backgroundColor: "#e07850" }}
+                >
+                  5
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-1">
+                    Watch the Magic Happen
+                  </h3>
+                  <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm">
+                    Learnspace will automatically cluster related links, extract key concepts, and generate personalized learning content tailored to your style — whether that&apos;s concise bullet points, in-depth explanations, or even audio summaries.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA Button */}
+            <div className="mt-12">
+              <Link
+                href="/me"
+                className="inline-block px-10 py-4 text-white text-sm tracking-[0.15em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
+                style={{ backgroundColor: "#e07850" }}
+              >
+                Go to My Learnspace →
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Survey Steps */}
+        {!surveyComplete && (
         <div className="max-w-2xl w-full">
           
           {/* Step 1: Learning Style */}
@@ -225,7 +349,6 @@ export default function Onboarding() {
                       : "none" 
                   }}
                 >
-                  <div className="text-3xl mb-4" style={{ color: "#e07850" }}>✎</div>
                   <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
                     Verbal / Text
                   </h3>
@@ -247,7 +370,6 @@ export default function Onboarding() {
                       : "none" 
                   }}
                 >
-                  <div className="text-3xl mb-4" style={{ color: "#e07850" }}>🎧</div>
                   <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-2">
                     Audio / Podcast
                   </h3>
@@ -610,6 +732,7 @@ export default function Onboarding() {
             </button>
           </div>
         </div>
+        )}
       </main>
     </div>
   );
