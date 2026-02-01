@@ -420,9 +420,9 @@ export default function Onboarding() {
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
-                  { id: "short" as const, label: "Short", desc: "5-10 minutes" },
-                  { id: "medium" as const, label: "Medium", desc: "15-25 minutes" },
-                  { id: "long" as const, label: "Long", desc: "30-45 minutes" },
+                  { id: "short" as const, label: "Short", desc: "1 minute" },
+                  { id: "medium" as const, label: "Medium", desc: "3 minutes" },
+                  { id: "long" as const, label: "Long", desc: "5 minutes" },
                 ].map(option => (
                   <button
                     key={option.id}
