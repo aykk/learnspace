@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getAllClusters, getClusterById, deleteEmptyClusters } from '@/lib/db';
+import { NextRequest, NextResponse } from 'next/server';
+import { getAllClusters, getClusterById, deleteEmptyClusters, deleteCluster } from '@/lib/db';
 
 /**
  * GET /api/clusters
@@ -39,6 +39,40 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error('Get clusters error:', error);
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/clusters?id=clusterId
+ * Delete a cluster by ID
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Cluster ID required (query parameter: ?id=clusterId)' },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await deleteCluster(id);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: 'Cluster not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, message: 'Cluster deleted' });
+  } catch (error) {
+    console.error('Delete cluster error:', error);
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 500 }

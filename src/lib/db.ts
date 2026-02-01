@@ -330,3 +330,20 @@ export async function removeIRFromClusters(irId: string): Promise<void> {
     }
   }
 }
+
+/**
+ * Delete a cluster by ID
+ */
+export async function deleteCluster(clusterId: string): Promise<boolean> {
+  try {
+    const affected = await execute('DELETE FROM CLUSTERS WHERE ID = ?', [clusterId]);
+    if (affected > 0) {
+      console.log(`❄️  [Learnspace DB] Deleted cluster ${clusterId}`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error(`Failed to delete cluster ${clusterId}:`, error);
+    throw error;
+  }
+}

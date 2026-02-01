@@ -1543,7 +1543,7 @@ export default function Dashboard() {
                 style={{
                   left: `${displayX}%`,
                   top: `${displayY}%`,
-                  transform: `translate(-50%, -50%) scale(${isBeingDragged ? 1.15 : isSelected ? 1.2 : isHovered ? 1.1 : 1})`,
+                  transform: `translate(-50%, -50%) scale(${isBeingDragged ? 1.15 : isSelected ? 1.5 : isHovered ? 1.1 : 1})`,
                   zIndex: isBeingDragged ? 100 : isSelected ? 20 : isSearchMatch ? 15 : isHovered ? 12 : 10,
                   animation: isSelected || isHovered || isBeingDragged || hasFocus ? 'none' : getFloatAnimation(index),
                   transition: isBeingDragged ? 'none' : 'left 0.5s ease-out, top 0.5s ease-out, transform 0.2s ease-out, opacity 0.3s ease-out',
@@ -1669,12 +1669,50 @@ export default function Dashboard() {
                     {selectedCluster.name}
                   </h2>
                 </div>
-                <button 
-                  onClick={() => setSelectedCluster(null)}
-                  className="text-neutral-500 hover:text-neutral-900 transition-colors"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={async () => {
+                      if (!confirm(`Delete cluster "${selectedCluster.name}"? This cannot be undone.`)) return;
+                      try {
+                        const res = await fetch(`/api/clusters?id=${selectedCluster.id}`, {
+                          method: 'DELETE',
+                        });
+                        if (!res.ok) throw new Error('Failed to delete cluster');
+                        // Remove from local state
+                        setClusters(prev => prev.filter(c => c.id !== selectedCluster.id));
+                        // Clear saved positions for this cluster
+                        if (typeof window !== 'undefined') {
+                          const saved = localStorage.getItem(CLUSTER_POSITIONS_KEY);
+                          if (saved) {
+                            const positions = JSON.parse(saved);
+                            delete positions[selectedCluster.id];
+                            localStorage.setItem(CLUSTER_POSITIONS_KEY, JSON.stringify(positions));
+                          }
+                        }
+                        // Close sidebar
+                        setSelectedCluster(null);
+                        // Reload clusters to sync with backend
+                        await loadClusters();
+                      } catch (err) {
+                        console.error('Delete cluster error:', err);
+                        alert(`Failed to delete cluster: ${(err as Error).message}`);
+                      }
+                    }}
+                    className="text-red-500 hover:text-red-700 transition-colors p-1"
+                    title="Delete cluster"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                  <button 
+                    onClick={() => setSelectedCluster(null)}
+                    className="text-neutral-500 hover:text-neutral-900 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
               <p className="text-sm text-neutral-500 font-[family-name:var(--font-body)] mt-2">
                 {selectedCluster.links.length} links collected
