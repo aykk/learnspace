@@ -92,33 +92,19 @@ export default function Onboarding() {
 
   return (
     <div className="relative min-h-screen w-full bg-[#d0d0d0]">
-      {/* NOISE TEXTURE OVERLAY */}
-      <div className="pointer-events-none fixed inset-0 z-50 opacity-[0.5] mix-blend-overlay">
+      {/* NOISE TEXTURE OVERLAY - Optimized single layer */}
+      <div className="pointer-events-none fixed inset-0 z-50 opacity-[0.4] mix-blend-overlay">
         <svg className="h-full w-full">
-          <filter id="noiseFilter">
+          <filter id="noiseFilterOnboard">
             <feTurbulence
               type="fractalNoise"
-              baseFrequency="1.5"
-              numOctaves="5"
-              stitchTiles="stitch"
-            />
-          </filter>
-          <rect width="100%" height="100%" filter="url(#noiseFilter)" />
-        </svg>
-      </div>
-
-      {/* SECONDARY GRAIN LAYER */}
-      <div className="pointer-events-none fixed inset-0 z-40 opacity-[0.25] mix-blend-multiply">
-        <svg className="h-full w-full">
-          <filter id="noiseFilter2">
-            <feTurbulence
-              type="turbulence"
-              baseFrequency="2.5"
+              baseFrequency="1.2"
               numOctaves="3"
+              seed="20"
               stitchTiles="stitch"
             />
           </filter>
-          <rect width="100%" height="100%" filter="url(#noiseFilter2)" />
+          <rect width="100%" height="100%" filter="url(#noiseFilterOnboard)" />
         </svg>
       </div>
 
