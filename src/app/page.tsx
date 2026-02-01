@@ -191,24 +191,42 @@ export default function Home() {
             <div className="flex justify-center gap-12 md:gap-16">
               <a 
                 href="#"
-                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300 group"
+                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300"
+                style={{ textShadow: "none" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textShadow = "0 0 20px rgba(224, 120, 80, 0.6), 0 0 40px rgba(224, 120, 80, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textShadow = "none";
+                }}
               >
                 home
-                <span className="absolute -bottom-1 left-0 w-0 h-[2px] group-hover:w-full transition-all duration-300" style={{ backgroundColor: "#e07850" }} />
               </a>
               <a 
                 href="#about"
-                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300 group"
+                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300"
+                style={{ textShadow: "none" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textShadow = "0 0 20px rgba(224, 120, 80, 0.6), 0 0 40px rgba(224, 120, 80, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textShadow = "none";
+                }}
               >
                 about
-                <span className="absolute -bottom-1 left-0 w-0 h-[2px] group-hover:w-full transition-all duration-300" style={{ backgroundColor: "#e07850" }} />
               </a>
               <a 
                 href="#features"
-                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300 group"
+                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300"
+                style={{ textShadow: "none" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textShadow = "0 0 20px rgba(224, 120, 80, 0.6), 0 0 40px rgba(224, 120, 80, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textShadow = "none";
+                }}
               >
                 features
-                <span className="absolute -bottom-1 left-0 w-0 h-[2px] group-hover:w-full transition-all duration-300" style={{ backgroundColor: "#e07850" }} />
               </a>
             </div>
           </nav>

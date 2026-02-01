@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -171,8 +171,91 @@ export default function Dashboard() {
   const [flashcardSlideDirection, setFlashcardSlideDirection] = useState<'left' | 'right' | null>(null);
   const [selectedJargon, setSelectedJargon] = useState<string | null>(null);
   const [jargonDefinition, setJargonDefinition] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const clusterRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Check if a cluster matches the search query
+  const clusterMatchesSearch = useCallback((cluster: Cluster, query: string): boolean => {
+    if (!query.trim()) return false;
+    const lowerQuery = query.toLowerCase().trim();
+    
+    // Check cluster name
+    if (cluster.name.toLowerCase().includes(lowerQuery)) return true;
+    
+    // Check summary
+    if (cluster.summary.toLowerCase().includes(lowerQuery)) return true;
+    
+    // Check concepts
+    if (cluster.concepts.some(c => c.toLowerCase().includes(lowerQuery))) return true;
+    
+    // Check link titles and URLs
+    if (cluster.links.some(link => 
+      link.title.toLowerCase().includes(lowerQuery) || 
+      link.url.toLowerCase().includes(lowerQuery) ||
+      link.source.toLowerCase().includes(lowerQuery)
+    )) return true;
+    
+    return false;
+  }, []);
+
+  // Get set of matching cluster IDs for efficient lookup
+  const matchingClusterIds = useMemo(() => {
+    if (!searchQuery.trim()) return new Set<string>();
+    return new Set(clusters.filter(c => clusterMatchesSearch(c, searchQuery)).map(c => c.id));
+  }, [clusters, searchQuery, clusterMatchesSearch]);
+
+  // Calculate search-focused positions - matching clusters go to center, others to edges
+  const getSearchPosition = useCallback((cluster: Cluster, index: number, matchingIds: Set<string>, allClusters: Cluster[]): { x: number; y: number } => {
+    if (!searchQuery.trim() || matchingIds.size === 0) {
+      return cluster.position; // Return original position when not searching
+    }
+
+    const isMatch = matchingIds.has(cluster.id);
+    
+    if (isMatch) {
+      // Get matching clusters and find this cluster's index among them
+      const matchingClusters = allClusters.filter(c => matchingIds.has(c.id));
+      const matchIndex = matchingClusters.findIndex(c => c.id === cluster.id);
+      const totalMatches = matchingClusters.length;
+      
+      if (totalMatches === 1) {
+        // Single match goes to center
+        return { x: 50, y: 50 };
+      }
+      
+      // Arrange multiple matches in a circular pattern around center
+      const centerX = 50;
+      const centerY = 50;
+      const radius = Math.min(15, 8 + totalMatches * 2); // Dynamic radius based on count
+      const angleStep = (2 * Math.PI) / totalMatches;
+      const startAngle = -Math.PI / 2; // Start from top
+      
+      const angle = startAngle + matchIndex * angleStep;
+      return {
+        x: centerX + Math.cos(angle) * radius,
+        y: centerY + Math.sin(angle) * radius,
+      };
+    } else {
+      // Non-matching clusters move to edges
+      const nonMatchingClusters = allClusters.filter(c => !matchingIds.has(c.id));
+      const nonMatchIndex = nonMatchingClusters.findIndex(c => c.id === cluster.id);
+      const totalNonMatches = nonMatchingClusters.length;
+      
+      // Distribute non-matching clusters around the edges in a circle
+      const centerX = 50;
+      const centerY = 50;
+      const radius = 42; // Push to outer edge
+      const angleStep = (2 * Math.PI) / totalNonMatches;
+      const startAngle = -Math.PI / 2;
+      
+      const angle = startAngle + nonMatchIndex * angleStep;
+      return {
+        x: centerX + Math.cos(angle) * radius,
+        y: centerY + Math.sin(angle) * radius,
+      };
+    }
+  }, [searchQuery]);
 
   // Render markdown and handle jargon terms
   const renderMarkdownWithJargon = useCallback((content: string) => {
@@ -819,6 +902,42 @@ export default function Dashboard() {
           </p>
         </div>
 
+        {/* Search Bar */}
+        <div className="p-4 border-b border-neutral-300/50">
+          <div className="relative">
+            <svg 
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400"
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search clusters, links..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white/50 border border-neutral-300/50 rounded-sm text-sm text-neutral-800 placeholder:text-neutral-400 font-[family-name:var(--font-body)] focus:outline-none focus:border-[#e07850] focus:ring-1 focus:ring-[#e07850]/30 transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <p className="text-xs text-neutral-500 mt-2 font-[family-name:var(--font-body)]">
+              {matchingClusterIds.size} {matchingClusterIds.size === 1 ? 'match' : 'matches'} found
+            </p>
+          )}
+        </div>
+
         {/* Clusters List */}
         <div className="flex-1 overflow-y-auto p-4">
           <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-4 font-[family-name:var(--font-body)]">
@@ -827,6 +946,7 @@ export default function Dashboard() {
           <div className="space-y-2">
             {clusters.map((cluster) => {
               const isSelectedCluster = selectedCluster?.id === cluster.id;
+              const isSearchMatch = matchingClusterIds.has(cluster.id);
               return (
               <button
                 key={cluster.id}
@@ -839,9 +959,13 @@ export default function Dashboard() {
                 style={{
                   background: isSelectedCluster 
                     ? "linear-gradient(135deg, rgba(224,120,80,0.3) 0%, rgba(224,120,80,0.15) 100%)"
+                    : isSearchMatch
+                    ? "rgba(224, 120, 80, 0.15)"
                     : undefined,
                   boxShadow: isSelectedCluster
                     ? `0 0 0 2px #e07850, 0 0 20px #e0785030`
+                    : isSearchMatch
+                    ? `0 0 0 1px rgba(224, 120, 80, 0.5), 0 0 15px rgba(224, 120, 80, 0.2)`
                     : "none"
                 }}
               >
@@ -1055,6 +1179,13 @@ export default function Dashboard() {
             const isSelected = selectedCluster?.id === cluster.id;
             const isHovered = hoveredCluster === cluster.id;
             const isBeingDragged = draggedCluster === cluster.id;
+            const isSearchMatch = matchingClusterIds.has(cluster.id);
+            const hasActiveSearch = searchQuery.trim().length > 0 && matchingClusterIds.size > 0;
+            const searchPosition = getSearchPosition(cluster, index, matchingClusterIds, visibleClusters);
+
+            // Determine position: selected goes to center, otherwise use search position or original
+            const displayX = isSelected ? 50 : (hasActiveSearch ? searchPosition.x : cluster.position.x);
+            const displayY = isSelected ? 50 : (hasActiveSearch ? searchPosition.y : cluster.position.y);
 
             return (
               <div
@@ -1070,13 +1201,14 @@ export default function Dashboard() {
                 onMouseLeave={() => setHoveredCluster(null)}
                 className={`absolute cursor-grab group ${isBeingDragged ? 'cursor-grabbing' : ''} ${cluster.isHidden ? 'opacity-40' : ''}`}
                 style={{
-                  left: isSelected ? '50%' : `${cluster.position.x}%`,
-                  top: isSelected ? '50%' : `${cluster.position.y}%`,
+                  left: `${displayX}%`,
+                  top: `${displayY}%`,
                   transform: `translate(-50%, -50%) scale(${isBeingDragged ? 1.15 : isSelected ? 1.2 : isHovered ? 1.1 : 1})`,
-                  zIndex: isBeingDragged ? 100 : isSelected ? 20 : isHovered ? 15 : 10,
-                  animation: isSelected || isHovered || isBeingDragged ? 'none' : getFloatAnimation(index),
-                  transition: isBeingDragged ? 'none' : 'left 0.4s ease-out, top 0.4s ease-out, transform 0.2s ease-out',
+                  zIndex: isBeingDragged ? 100 : isSelected ? 20 : isSearchMatch ? 15 : isHovered ? 12 : 10,
+                  animation: isSelected || isHovered || isBeingDragged || hasActiveSearch ? 'none' : getFloatAnimation(index),
+                  transition: isBeingDragged ? 'none' : 'left 0.5s ease-out, top 0.5s ease-out, transform 0.2s ease-out, opacity 0.3s ease-out',
                   willChange: isBeingDragged ? 'left, top, transform' : 'auto',
+                  opacity: hasActiveSearch && !isSearchMatch ? 0.3 : 1,
                 }}
               >
                 {/* Read indicator */}
@@ -1091,6 +1223,21 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {/* Search match highlight ring */}
+                {isSearchMatch && !isSelected && !isBeingDragged && (
+                  <div
+                    className="absolute inset-0 rounded-full animate-pulse"
+                    style={{
+                      width: size + 20,
+                      height: size + 20,
+                      left: -10,
+                      top: -10,
+                      background: `radial-gradient(circle, rgba(224, 120, 80, 0.4) 0%, rgba(224, 120, 80, 0.2) 50%, transparent 70%)`,
+                      filter: "blur(15px)",
+                    }}
+                  />
+                )}
+
                 {/* Outer glow */}
                 <div
                   className="absolute inset-0 rounded-full transition-all duration-300"
@@ -1099,8 +1246,10 @@ export default function Dashboard() {
                     height: size + 40,
                     left: -20,
                     top: -20,
-                    background: `radial-gradient(circle, ${cluster.color}30 0%, ${cluster.color}10 50%, transparent 70%)`,
-                    opacity: isSelected || isHovered || isBeingDragged ? 1 : 0.5,
+                    background: isSearchMatch && !isSelected
+                      ? `radial-gradient(circle, rgba(224, 120, 80, 0.5) 0%, rgba(224, 120, 80, 0.2) 50%, transparent 70%)`
+                      : `radial-gradient(circle, ${cluster.color}30 0%, ${cluster.color}10 50%, transparent 70%)`,
+                    opacity: isSelected || isHovered || isBeingDragged || isSearchMatch ? 1 : 0.5,
                     filter: "blur(20px)",
                   }}
                 />
@@ -1116,6 +1265,8 @@ export default function Dashboard() {
                       ? `0 0 0 3px #e07850, 0 0 60px ${cluster.color}80, 0 30px 80px ${cluster.color}60`
                       : isSelected 
                       ? `0 0 0 3px white, 0 0 40px ${cluster.color}60, 0 20px 60px ${cluster.color}40`
+                      : isSearchMatch
+                      ? `0 0 0 3px #e07850, 0 0 30px rgba(224, 120, 80, 0.6), 0 10px 40px ${cluster.color}30`
                       : `0 10px 40px ${cluster.color}30`,
                   }}
                 >
