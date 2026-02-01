@@ -74,12 +74,12 @@ async function removeFromWebapp(url) {
   }
 }
 
-// Handle new bookmark created (e.g. drag into folder, add via Chrome UI)
+// Handle new bookmark created (works for both popup add and drag-drop)
 async function onBookmarkCreated(id, bookmark) {
-  // Fetch full node — callback sometimes receives incomplete object
+  // Fetch full bookmark - the passed object can be incomplete when created via drag-drop
   const nodes = await chrome.bookmarks.get(id);
   const node = nodes[0];
-  if (!node?.url) return;
+  if (!node || !node.url) return; // Skip folders
 
   const learnspaceId = await getLearnspaceFolderId();
   if (!learnspaceId || node.parentId !== learnspaceId) return;
