@@ -351,6 +351,18 @@ export default function Onboarding() {
                   </p>
                 </div>
               </div>
+
+              {/* Help Tip */}
+              <div className="flex gap-3 items-center p-4 bg-[#e07850]/10 border border-[#e07850]/20 rounded-sm mt-2">
+                <div 
+                  className="flex-shrink-0 w-8 h-8 rounded-sm flex items-center justify-center text-[#e07850] font-semibold font-serif bg-white/60"
+                >
+                  ?
+                </div>
+                <p className="text-neutral-900/70 font-[family-name:var(--font-body)] text-sm">
+                  <span className="font-medium text-neutral-900/85">Need a refresher?</span> Click the <span className="font-semibold text-[#e07850]">?</span> button in the top right corner of your Learnspace anytime to see how things work.
+                </p>
+              </div>
             </div>
 
             {/* CTA Button */}

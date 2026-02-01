@@ -205,51 +205,70 @@ export default function Dashboard() {
     return new Set(clusters.filter(c => clusterMatchesSearch(c, searchQuery)).map(c => c.id));
   }, [clusters, searchQuery, clusterMatchesSearch]);
 
-  // Calculate search-focused positions - matching clusters go to center, others to edges
-  const getSearchPosition = useCallback((cluster: Cluster, index: number, matchingIds: Set<string>, allClusters: Cluster[]): { x: number; y: number } => {
-    if (!searchQuery.trim() || matchingIds.size === 0) {
-      return cluster.position; // Return original position when not searching
+  // Calculate focused positions - for search matches or selected cluster
+  const getFocusedPosition = useCallback((
+    cluster: Cluster, 
+    index: number, 
+    matchingIds: Set<string>, 
+    allClusters: Cluster[],
+    selected: Cluster | null
+  ): { x: number; y: number } => {
+    const hasActiveSearch = searchQuery.trim().length > 0 && matchingIds.size > 0;
+    const hasSelection = selected !== null;
+    
+    // If no search and no selection, return original position
+    if (!hasActiveSearch && !hasSelection) {
+      return cluster.position;
     }
 
-    const isMatch = matchingIds.has(cluster.id);
+    // Determine which clusters are "focused" (either search matches or selected)
+    const isFocused = hasActiveSearch 
+      ? matchingIds.has(cluster.id) 
+      : cluster.id === selected?.id;
     
-    if (isMatch) {
-      // Get matching clusters and find this cluster's index among them
-      const matchingClusters = allClusters.filter(c => matchingIds.has(c.id));
-      const matchIndex = matchingClusters.findIndex(c => c.id === cluster.id);
-      const totalMatches = matchingClusters.length;
-      
-      if (totalMatches === 1) {
-        // Single match goes to center
+    if (isFocused) {
+      if (hasActiveSearch) {
+        // Multiple search matches - arrange in circle
+        const matchingClusters = allClusters.filter(c => matchingIds.has(c.id));
+        const matchIndex = matchingClusters.findIndex(c => c.id === cluster.id);
+        const totalMatches = matchingClusters.length;
+        
+        if (totalMatches === 1) {
+          return { x: 50, y: 50 };
+        }
+        
+        const centerX = 50;
+        const centerY = 50;
+        const radius = Math.min(15, 8 + totalMatches * 2);
+        const angleStep = (2 * Math.PI) / totalMatches;
+        const startAngle = -Math.PI / 2;
+        
+        const angle = startAngle + matchIndex * angleStep;
+        return {
+          x: centerX + Math.cos(angle) * radius,
+          y: centerY + Math.sin(angle) * radius,
+        };
+      } else {
+        // Single selected cluster goes to center
         return { x: 50, y: 50 };
       }
-      
-      // Arrange multiple matches in a circular pattern around center
-      const centerX = 50;
-      const centerY = 50;
-      const radius = Math.min(15, 8 + totalMatches * 2); // Dynamic radius based on count
-      const angleStep = (2 * Math.PI) / totalMatches;
-      const startAngle = -Math.PI / 2; // Start from top
-      
-      const angle = startAngle + matchIndex * angleStep;
-      return {
-        x: centerX + Math.cos(angle) * radius,
-        y: centerY + Math.sin(angle) * radius,
-      };
     } else {
-      // Non-matching clusters move to edges
-      const nonMatchingClusters = allClusters.filter(c => !matchingIds.has(c.id));
-      const nonMatchIndex = nonMatchingClusters.findIndex(c => c.id === cluster.id);
-      const totalNonMatches = nonMatchingClusters.length;
+      // Non-focused clusters move to edges
+      const nonFocusedClusters = hasActiveSearch
+        ? allClusters.filter(c => !matchingIds.has(c.id))
+        : allClusters.filter(c => c.id !== selected?.id);
+      const nonFocusIndex = nonFocusedClusters.findIndex(c => c.id === cluster.id);
+      const totalNonFocused = nonFocusedClusters.length;
       
-      // Distribute non-matching clusters around the edges in a circle
+      if (totalNonFocused === 0) return cluster.position;
+      
       const centerX = 50;
       const centerY = 50;
-      const radius = 42; // Push to outer edge
-      const angleStep = (2 * Math.PI) / totalNonMatches;
+      const radius = 42;
+      const angleStep = (2 * Math.PI) / totalNonFocused;
       const startAngle = -Math.PI / 2;
       
-      const angle = startAngle + nonMatchIndex * angleStep;
+      const angle = startAngle + nonFocusIndex * angleStep;
       return {
         x: centerX + Math.cos(angle) * radius,
         y: centerY + Math.sin(angle) * radius,
@@ -1052,7 +1071,7 @@ export default function Dashboard() {
 
       {/* MAIN CONTENT - Cluster Visualization */}
       <main className={`relative z-30 flex-1 min-h-screen overflow-hidden transition-all duration-500 ${selectedCluster ? 'mr-80' : ''}`}>
-        {/* Zoom Controls */}
+        {/* Zoom Controls & Help */}
         <div className="absolute top-4 right-4 z-40 flex flex-col gap-2 bg-white/40 backdrop-blur-sm rounded-sm p-2">
           <button 
             onClick={() => setZoom(z => Math.min(2, z + 0.1))}
@@ -1078,20 +1097,19 @@ export default function Dashboard() {
           >
             Reset
           </button>
+          <div className="border-t border-neutral-300/50 my-1" />
+          <button 
+            onClick={() => setShowHelp(!showHelp)}
+            className="w-8 h-8 flex items-center justify-center text-[#e07850] hover:text-[#c06040] bg-white/50 hover:bg-white/80 rounded-sm transition-colors"
+            title="Help"
+          >
+            <span className="text-sm font-semibold font-serif">?</span>
+          </button>
         </div>
-
-        {/* Help Button - Bottom Left next to sidebar */}
-        <button 
-          onClick={() => setShowHelp(!showHelp)}
-          className="absolute bottom-6 left-4 z-40 w-12 h-12 flex items-center justify-center border-2 border-[#e07850] hover:bg-[#e07850]/10 text-[#e07850] rounded-full transition-colors"
-          title="Help"
-        >
-          <span className="text-xl font-bold font-serif">i</span>
-        </button>
 
         {/* Help Tooltip */}
         {showHelp && (
-          <div className="absolute bottom-20 left-4 z-50 w-72 bg-white/95 backdrop-blur-md rounded-sm shadow-lg border border-neutral-200 p-4">
+          <div className="absolute top-[220px] right-4 z-50 w-72 bg-white/95 backdrop-blur-md rounded-sm shadow-lg border border-neutral-200 p-4">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-sm font-semibold text-neutral-900 font-[family-name:var(--font-display)]">How to use Learnspace</h3>
               <button onClick={() => setShowHelp(false)} className="text-neutral-500 hover:text-neutral-900">✕</button>
@@ -1181,11 +1199,12 @@ export default function Dashboard() {
             const isBeingDragged = draggedCluster === cluster.id;
             const isSearchMatch = matchingClusterIds.has(cluster.id);
             const hasActiveSearch = searchQuery.trim().length > 0 && matchingClusterIds.size > 0;
-            const searchPosition = getSearchPosition(cluster, index, matchingClusterIds, visibleClusters);
+            const hasFocus = hasActiveSearch || isSelected;
+            const focusedPosition = getFocusedPosition(cluster, index, matchingClusterIds, visibleClusters, selectedCluster);
 
-            // Determine position: selected goes to center, otherwise use search position or original
-            const displayX = isSelected ? 50 : (hasActiveSearch ? searchPosition.x : cluster.position.x);
-            const displayY = isSelected ? 50 : (hasActiveSearch ? searchPosition.y : cluster.position.y);
+            // Use focused position when searching or when a cluster is selected
+            const displayX = focusedPosition.x;
+            const displayY = focusedPosition.y;
 
             return (
               <div
@@ -1205,10 +1224,10 @@ export default function Dashboard() {
                   top: `${displayY}%`,
                   transform: `translate(-50%, -50%) scale(${isBeingDragged ? 1.15 : isSelected ? 1.2 : isHovered ? 1.1 : 1})`,
                   zIndex: isBeingDragged ? 100 : isSelected ? 20 : isSearchMatch ? 15 : isHovered ? 12 : 10,
-                  animation: isSelected || isHovered || isBeingDragged || hasActiveSearch ? 'none' : getFloatAnimation(index),
+                  animation: isSelected || isHovered || isBeingDragged || hasFocus ? 'none' : getFloatAnimation(index),
                   transition: isBeingDragged ? 'none' : 'left 0.5s ease-out, top 0.5s ease-out, transform 0.2s ease-out, opacity 0.3s ease-out',
                   willChange: isBeingDragged ? 'left, top, transform' : 'auto',
-                  opacity: hasActiveSearch && !isSearchMatch ? 0.3 : 1,
+                  opacity: hasFocus && !isSelected && !isSearchMatch ? 0.3 : 1,
                 }}
               >
                 {/* Read indicator */}
@@ -1223,16 +1242,16 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Search match highlight ring */}
-                {isSearchMatch && !isSelected && !isBeingDragged && (
+                {/* Orange highlight ring - for selected or search match */}
+                {(isSelected || isSearchMatch) && !isBeingDragged && (
                   <div
-                    className="absolute inset-0 rounded-full animate-pulse"
+                    className={`absolute inset-0 rounded-full ${isSelected ? '' : 'animate-pulse'}`}
                     style={{
                       width: size + 20,
                       height: size + 20,
                       left: -10,
                       top: -10,
-                      background: `radial-gradient(circle, rgba(224, 120, 80, 0.4) 0%, rgba(224, 120, 80, 0.2) 50%, transparent 70%)`,
+                      background: `radial-gradient(circle, rgba(224, 120, 80, ${isSelected ? 0.5 : 0.4}) 0%, rgba(224, 120, 80, ${isSelected ? 0.3 : 0.2}) 50%, transparent 70%)`,
                       filter: "blur(15px)",
                     }}
                   />
@@ -1246,7 +1265,7 @@ export default function Dashboard() {
                     height: size + 40,
                     left: -20,
                     top: -20,
-                    background: isSearchMatch && !isSelected
+                    background: (isSelected || isSearchMatch)
                       ? `radial-gradient(circle, rgba(224, 120, 80, 0.5) 0%, rgba(224, 120, 80, 0.2) 50%, transparent 70%)`
                       : `radial-gradient(circle, ${cluster.color}30 0%, ${cluster.color}10 50%, transparent 70%)`,
                     opacity: isSelected || isHovered || isBeingDragged || isSearchMatch ? 1 : 0.5,
@@ -1264,7 +1283,7 @@ export default function Dashboard() {
                     boxShadow: isBeingDragged
                       ? `0 0 0 3px #e07850, 0 0 60px ${cluster.color}80, 0 30px 80px ${cluster.color}60`
                       : isSelected 
-                      ? `0 0 0 3px white, 0 0 40px ${cluster.color}60, 0 20px 60px ${cluster.color}40`
+                      ? `0 0 0 3px #e07850, 0 0 30px rgba(224, 120, 80, 0.6), 0 20px 60px ${cluster.color}40`
                       : isSearchMatch
                       ? `0 0 0 3px #e07850, 0 0 30px rgba(224, 120, 80, 0.6), 0 10px 40px ${cluster.color}30`
                       : `0 10px 40px ${cluster.color}30`,
