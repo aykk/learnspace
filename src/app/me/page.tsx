@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // User preferences from onboarding
@@ -144,6 +145,7 @@ interface Cluster {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [hoveredCluster, setHoveredCluster] = useState<string | null>(null);
@@ -154,6 +156,7 @@ export default function Dashboard() {
   const [showHelp, setShowHelp] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [preferences, setPreferences] = useState<UserContentPreferences | null>(null);
+  const [preferencesChecked, setPreferencesChecked] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentStatus, setContentStatus] = useState<string>('');
   const [flashcardLoading, setFlashcardLoading] = useState(false);
@@ -179,9 +182,9 @@ export default function Dashboard() {
     // Simple markdown to HTML conversion
     let html = content
       // Code blocks first (to avoid processing markdown inside them)
-      .replace(/```([\s\S]*?)```/g, '<pre class="bg-neutral-100 p-4 rounded-sm overflow-x-auto my-4 font-mono text-sm break-words whitespace-pre-wrap" style="word-break: break-word; overflow-wrap: anywhere;"><code class="break-words">$1</code></pre>')
+      .replace(/```([\s\S]*?)```/g, '<pre class="bg-neutral-100 p-4 rounded-sm overflow-x-auto my-4 font-mono text-sm break-words whitespace-pre-wrap text-neutral-800" style="word-break: break-word; overflow-wrap: anywhere;"><code class="break-words text-neutral-800">$1</code></pre>')
       // Inline code
-      .replace(/`([^`]+)`/g, '<code class="bg-neutral-100 px-1.5 py-0.5 rounded text-sm font-mono break-words" style="word-break: break-word;">$1</code>')
+      .replace(/`([^`]+)`/g, '<code class="bg-neutral-100 px-1.5 py-0.5 rounded text-sm font-mono break-words text-neutral-800" style="word-break: break-word;">$1</code>')
       // Headers
       .replace(/^### (.*$)/gim, '<h3 class="text-xl font-semibold text-neutral-900 mt-6 mb-3 font-[family-name:var(--font-display)]">$1</h3>')
       .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-semibold text-neutral-900 mt-8 mb-4 font-[family-name:var(--font-display)]">$1</h2>')
@@ -189,11 +192,11 @@ export default function Dashboard() {
       // Bold (but not inside code)
       .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-neutral-900">$1</strong>')
       // Italic (but not inside code)
-      .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em class="italic">$1</em>')
+      .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em class="italic text-neutral-700">$1</em>')
       // Bullet points
-      .replace(/^- (.*$)/gim, '<li class="ml-6 mb-2 list-disc">$1</li>')
+      .replace(/^- (.*$)/gim, '<li class="ml-6 mb-2 list-disc text-neutral-700">$1</li>')
       // Numbered lists
-      .replace(/^\d+\. (.*$)/gim, '<li class="ml-6 mb-2 list-decimal">$1</li>');
+      .replace(/^\d+\. (.*$)/gim, '<li class="ml-6 mb-2 list-decimal text-neutral-700">$1</li>');
 
     // Split by double newlines for paragraphs
     const paragraphs = html.split(/\n\n+/);
@@ -207,7 +210,7 @@ export default function Dashboard() {
       // Wrap list items in ul/ol
       if (p.includes('<li')) {
         const isNumbered = p.includes('list-decimal');
-        return `<${isNumbered ? 'ol' : 'ul'} class="mb-4 space-y-1">${p}</${isNumbered ? 'ol' : 'ul'}>`;
+        return `<${isNumbered ? 'ol' : 'ul'} class="mb-4 space-y-1 text-neutral-700">${p}</${isNumbered ? 'ol' : 'ul'}>`;
       }
       return p;
     }).join('');
@@ -264,17 +267,23 @@ export default function Dashboard() {
   const hasDraggedRef = useRef(false);
   const dragStartPosRef = useRef<{x: number; y: number} | null>(null);
 
-  // Load preferences from localStorage
+  // Load preferences from localStorage - redirect to onboarding if not found
   useEffect(() => {
     const saved = localStorage.getItem('learnspace_preferences');
     if (saved) {
       try {
         setPreferences(JSON.parse(saved));
+        setPreferencesChecked(true);
       } catch (e) {
         console.error('Failed to parse preferences:', e);
+        // Invalid preferences, redirect to onboarding
+        router.push('/onboarding');
       }
+    } else {
+      // No preferences found, redirect to onboarding
+      router.push('/onboarding');
     }
-  }, []);
+  }, [router]);
 
   // Load clusters from backend
   const loadClusters = useCallback(async () => {
@@ -674,6 +683,18 @@ export default function Dashboard() {
   const visibleClusters = showHidden ? clusters : clusters.filter(c => !c.isHidden);
   const totalLinks = clusters.reduce((acc, c) => acc + c.links.length, 0);
 
+  // Show loading state while checking preferences
+  if (!preferencesChecked) {
+    return (
+      <div className="relative min-h-screen w-full bg-[#d0d0d0] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#e07850] mx-auto mb-4"></div>
+          <p className="text-neutral-600 font-[family-name:var(--font-body)]">Loading your Learnspace...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen w-full bg-[#d0d0d0] flex">
       {/* Inject floating animation keyframes */}
@@ -919,6 +940,23 @@ export default function Dashboard() {
             }}
           />
 
+
+          {/* Empty State */}
+          {clusters.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center max-w-md px-8">
+                <div className="mb-6">
+                  <span className="text-6xl" style={{ color: "#e07850", opacity: 0.5 }}>◎</span>
+                </div>
+                <h2 className="text-2xl font-semibold text-neutral-900/70 font-[family-name:var(--font-display)] mb-4">
+                  Your Learnspace is currently empty
+                </h2>
+                <p className="text-neutral-600 font-[family-name:var(--font-body)] leading-relaxed">
+                  Add some bookmarks to your Learnspace folder or manually add links in the sidebar!
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Clusters */}
           {visibleClusters.map((cluster, index) => {
@@ -1270,8 +1308,8 @@ export default function Dashboard() {
             <div className="p-6 h-[calc(85vh-80px)] overflow-y-auto overflow-x-hidden">
               {contentWindowCluster.generatedContent?.content && (
                 <div 
-                  className="prose max-w-none font-[family-name:var(--font-body)] break-words overflow-wrap-anywhere"
-                  style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                  className="prose max-w-none font-[family-name:var(--font-body)] break-words overflow-wrap-anywhere text-neutral-800"
+                  style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', color: '#262626' }}
                   dangerouslySetInnerHTML={{ __html: renderMarkdownWithJargon(contentWindowCluster.generatedContent.content) }} 
                 />
               )}

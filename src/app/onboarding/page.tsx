@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 type LearningStyle = "verbal" | "audio" | null;
@@ -34,10 +34,26 @@ const interestOptions = [
 export default function Onboarding() {
   const [step, setStep] = useState(1);
   const [surveyComplete, setSurveyComplete] = useState(false);
+  const [hasExistingPreferences, setHasExistingPreferences] = useState(false);
+  const [showRetakePrompt, setShowRetakePrompt] = useState(false);
   const [data, setData] = useState<SurveyData>({
     learningStyle: null,
     interests: [],
   });
+
+  // Check if user has already completed the survey
+  useEffect(() => {
+    const saved = localStorage.getItem('learnspace_preferences');
+    if (saved) {
+      try {
+        JSON.parse(saved);
+        setHasExistingPreferences(true);
+        setShowRetakePrompt(true);
+      } catch {
+        // Invalid data, let them take survey
+      }
+    }
+  }, []);
 
   const totalSteps = data.learningStyle === "verbal" ? 6 : data.learningStyle === "audio" ? 5 : 2;
 
@@ -173,28 +189,65 @@ export default function Onboarding() {
           Learnspace<span style={{ color: "#e07850" }}>.</span>
         </Link>
         <div className="text-neutral-900/60 text-sm font-[family-name:var(--font-body)]">
-          {surveyComplete ? "Setup" : `Step ${step} of ${totalSteps}`}
+          {showRetakePrompt ? "" : surveyComplete ? "Setup" : `Step ${step} of ${totalSteps}`}
         </div>
       </header>
 
       {/* Progress bar */}
-      <div className="relative z-30 px-8 md:px-16">
-        <div className="h-1 bg-neutral-300 rounded-full overflow-hidden">
-          <div 
-            className="h-full transition-all duration-500 ease-out"
-            style={{ 
-              width: surveyComplete ? "100%" : `${((step - 1) / (totalSteps - 1)) * 100}%`,
-              backgroundColor: "#e07850" 
-            }}
-          />
+      {!showRetakePrompt && (
+        <div className="relative z-30 px-8 md:px-16">
+          <div className="h-1 bg-neutral-300 rounded-full overflow-hidden">
+            <div 
+              className="h-full transition-all duration-500 ease-out"
+              style={{ 
+                width: surveyComplete ? "100%" : `${((step - 1) / (totalSteps - 1)) * 100}%`,
+                backgroundColor: "#e07850" 
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main content */}
       <main className="relative z-30 flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-8 py-12">
         
+        {/* Already Taken Survey Prompt */}
+        {showRetakePrompt && (
+          <div className="max-w-2xl w-full text-center">
+            <div className="mb-8">
+              <span className="text-5xl" style={{ color: "#e07850" }}>◈</span>
+            </div>
+            
+            <h1 className="text-4xl md:text-5xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-4">
+              Welcome back<span style={{ color: "#e07850" }}>!</span>
+            </h1>
+            <p className="text-neutral-900/60 text-lg font-[family-name:var(--font-body)] mb-12">
+              You have already taken the onboarding survey. Would you like to take it again?
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => {
+                  setShowRetakePrompt(false);
+                  setStep(1);
+                }}
+                className="px-10 py-4 text-white text-sm tracking-[0.15em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
+                style={{ backgroundColor: "#e07850" }}
+              >
+                Yes, retake survey
+              </button>
+              <Link
+                href="/me"
+                className="px-10 py-4 text-neutral-700 text-sm tracking-[0.15em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:text-neutral-900 bg-white/40 hover:bg-white/60"
+              >
+                No, go to My Learnspace
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Survey Complete - Setup Instructions */}
-        {surveyComplete && (
+        {surveyComplete && !showRetakePrompt && (
           <div className="max-w-3xl w-full text-center">
             <div className="mb-8">
               <span className="text-5xl" style={{ color: "#e07850" }}>✓</span>
@@ -314,7 +367,7 @@ export default function Onboarding() {
         )}
 
         {/* Survey Steps */}
-        {!surveyComplete && (
+        {!surveyComplete && !showRetakePrompt && (
         <div className="max-w-2xl w-full">
           
           {/* Step 1: Learning Style */}
