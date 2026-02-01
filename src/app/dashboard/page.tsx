@@ -529,6 +529,62 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* Learning Clusters */}
+        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-[#29b5e8] mb-1">🧩 Learning Clusters</h2>
+              <p className="text-white/60 text-sm">
+                AI-generated groups of related content based on semantic similarity
+              </p>
+            </div>
+            <button
+              onClick={handleGenerateClusters}
+              disabled={generatingClusters || Object.keys(irs).length < 1}
+              className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm"
+              title={Object.keys(irs).length < 1 ? 'Add at least one bookmark and extract its IR first' : ''}
+            >
+              {generatingClusters ? 'Generating...' : clusters.length > 0 ? 'Regenerate Clusters' : 'Generate Clusters'}
+            </button>
+          </div>
+
+          {clusterError && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm">
+              {clusterError}
+            </div>
+          )}
+
+          {clusters.length === 0 ? (
+            <div className="text-center py-8 text-white/50 italic">
+              No clusters yet. Generate clusters from your IRs to see related content grouped together.
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {clusters.map((cluster) => (
+                <div key={cluster.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-white">{cluster.name}</h3>
+                    <span className="text-xs bg-[#29b5e8]/20 text-[#29b5e8] px-2 py-1 rounded">
+                      {cluster.memberCount} {cluster.memberCount === 1 ? 'item' : 'items'}
+                    </span>
+                  </div>
+                  <p className="text-white/70 text-sm mb-3">{cluster.description}</p>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {cluster.aggregatedTopics.slice(0, 5).map((topic, idx) => (
+                      <span key={idx} className="text-xs bg-white/10 text-white/80 px-2 py-1 rounded">
+                        {topic}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="text-xs text-white/50">
+                    Difficulty: <span className="text-white/70">{cluster.avgDifficulty}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Podcast Generator */}
         <div className="bg-[#16162a] rounded-xl p-6 border border-white/10">
           <h2 className="text-lg font-semibold text-[#29b5e8] mb-2">🎙️ Generate Podcast</h2>
