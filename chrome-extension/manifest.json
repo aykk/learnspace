@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Learnspace",
+  "version": "1.6.7",
+  "description": "Creates a learnspace folder in bookmarks and syncs bookmarked links to your webapp",
+  "permissions": ["bookmarks"],
+  "host_permissions": ["https://*/*", "http://localhost:*/*", "http://127.0.0.1:*/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

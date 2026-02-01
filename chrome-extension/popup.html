@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      width: 300px;
+      padding: 24px 20px 20px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      font-size: 14px;
+      color: #1d1d1f;
+      background:
+        radial-gradient(ellipse 120% 100% at 10% 10%, rgba(180,182,188,0.25) 0%, transparent 55%),
+        radial-gradient(ellipse 100% 120% at 90% 85%, rgba(170,172,178,0.2) 0%, transparent 50%),
+        radial-gradient(ellipse 140% 80% at 50% 30%, rgba(175,177,182,0.15) 0%, transparent 45%),
+        #f5f5f7;
+      letter-spacing: -0.01em;
+    }
+    h1 {
+      font-size: 21px;
+      font-weight: 600;
+      margin: 0 0 20px 0;
+      color: #1d1d1f;
+      letter-spacing: -0.02em;
+    }
+    .add-link {
+      margin-bottom: 20px;
+    }
+    .add-link input {
+      width: 100%;
+      padding: 12px 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      background: rgba(0,0,0,0.04);
+      color: #1d1d1f;
+      transition: background 0.2s ease;
+    }
+    .add-link input::placeholder {
+      color: #86868b;
+    }
+    .add-link input:focus {
+      outline: none;
+      background: rgba(0,0,0,0.06);
+    }
+    .add-link button {
+      width: 100%;
+      margin-top: 8px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      background: #1d1d1f;
+      color: #fff;
+      cursor: pointer;
+      transition: opacity 0.2s ease, transform 0.1s ease;
+    }
+    .add-link button:hover {
+      opacity: 0.88;
+    }
+    .add-link button:active {
+      transform: scale(0.98);
+    }
+    .add-link button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .add-link .msg {
+      font-size: 12px;
+      margin-top: 8px;
+      font-weight: 500;
+    }
+    .add-link .msg.success { color: #34c759; }
+    .add-link .msg.error { color: #ff3b30; }
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .nav a {
+      display: block;
+      padding: 10px 0;
+      text-decoration: none;
+      color: #1d1d1f;
+      font-size: 15px;
+      font-weight: 500;
+      opacity: 0.9;
+      transition: opacity 0.15s ease, color 0.15s ease;
+      border-bottom: none;
+    }
+    .nav a:hover {
+      opacity: 1;
+      color: #0071e3;
+    }
+    .nav a:active {
+      opacity: 0.8;
+    }
+    .hint {
+      font-size: 12px;
+      color: #86868b;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <h1>Learnspace</h1>
+  <div class="add-link">
+    <input type="url" id="url-input" placeholder="Paste a link" />
+    <button type="button" id="add-btn">Add</button>
+    <div class="msg" id="add-msg"></div>
+  </div>
+  <nav class="nav">
+    <a href="#" id="open-learnspace">Open folder</a>
+    <a href="http://localhost:3457" target="_blank">View database</a>
+  </nav>
+  <p class="hint">Save links to learnspace—bookmark or paste above.</p>
+  <script src="popup.js"></script>
+</body>
+</html>
