@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { SURVEY_CONFIG } from '@/lib/survey-config';
 
 interface Bookmark {
   ID: number;
@@ -38,6 +39,19 @@ interface Cluster {
   createdAt: string;
 }
 
+export interface UserContentPreferences {
+  learningStyle: 'verbal' | 'audio';
+  textFormat?: string;
+  jargonLevel?: string;
+  interests?: string[];
+  customInterests?: string;
+  podcastLength?: string;
+  podcastStyle?: string;
+  background: string;
+  backgroundDetails?: string;
+  extraNotes?: string;
+}
+
 export default function Dashboard() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [irs, setIrs] = useState<Record<number, IR>>({});
@@ -60,6 +74,205 @@ export default function Dashboard() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [generatingClusters, setGeneratingClusters] = useState(false);
   const [clusterError, setClusterError] = useState('');
+
+  // User content preferences and generated content
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState('');
+  const [generatedContent, setGeneratedContent] = useState('');
+  const [generatedPodcastUrl, setGeneratedPodcastUrl] = useState('');
+
+  // Content generation per cluster
+  const [clusterContents, setClusterContents] = useState<Record<string, { content?: string; podcastUrl?: string; sources: { title: string; url: string }[] }>>({});
+  const [clusterContentLoading, setClusterContentLoading] = useState<Record<string, boolean>>({});
+  const [clusterContentStatus, setClusterContentStatus] = useState<Record<string, string>>({});
+  const [clusterContentError, setClusterContentError] = useState<Record<string, string>>({});
+
+  // Per-cluster flashcards
+  const [clusterFlashcards, setClusterFlashcards] = useState<Record<string, { question: string; answer: string }[]>>({});
+  const [clusterFlashcardLoading, setClusterFlashcardLoading] = useState<Record<string, boolean>>({});
+  const [clusterFlashcardError, setClusterFlashcardError] = useState<Record<string, string>>({});
+  const [preferences, setPreferences] = useState<UserContentPreferences>({
+    learningStyle: 'verbal',
+    textFormat: 'bullet',
+    jargonLevel: 'some',
+    interests: [],
+    customInterests: '',
+    podcastLength: 'medium',
+    podcastStyle: 'educational',
+    background: 'student',
+    backgroundDetails: '',
+    extraNotes: '',
+  });
+
+  const toggleInterest = (interest: string) => {
+    setPreferences(prev => {
+      const current = prev.interests || [];
+      return {
+        ...prev,
+        interests: current.includes(interest)
+          ? current.filter(i => i !== interest)
+          : [...current, interest],
+      };
+    });
+  };
+
+  const handleGenerateContent = () => {
+    setContentLoading(true);
+    setContentError('');
+
+    if (preferences.learningStyle === 'audio') {
+      setGeneratedContent('');
+      setGeneratedPodcastUrl('');
+      const params = new URLSearchParams({
+        preferences: encodeURIComponent(JSON.stringify(preferences)),
+      });
+      const es = new EventSource(`/api/podcast/generate?${params}`);
+      es.addEventListener('status', (e: MessageEvent) => {
+        const data = JSON.parse(e.data);
+        setContentError('');
+      });
+      es.addEventListener('done', (e: MessageEvent) => {
+        const data = JSON.parse(e.data);
+        es.close();
+        if (data.url) {
+          setGeneratedPodcastUrl(data.url);
+          setPodcastUrl(data.url);
+          setPodcastStatus('Done! Playing…');
+          setPodcastError(false);
+        } else {
+          setContentError('No audio URL returned.');
+        }
+        setContentLoading(false);
+      });
+      es.addEventListener('error', (e: Event) => {
+        es.close();
+        try {
+          const data = JSON.parse((e as MessageEvent).data);
+          setContentError(data.error || 'Unknown error');
+        } catch {
+          setContentError('Connection lost or server error.');
+        }
+        setContentLoading(false);
+      });
+      es.onerror = () => {
+        es.close();
+        setContentError('Connection lost.');
+        setContentLoading(false);
+      };
+    } else {
+      setGeneratedContent('');
+      setGeneratedPodcastUrl('');
+      fetch('/api/content/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferences, source: 'bookmarks' }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) throw new Error(data.error);
+          setGeneratedContent(data.content || '');
+        })
+        .catch(err => setContentError((err as Error).message))
+        .finally(() => setContentLoading(false));
+    }
+  };
+
+  const handleGenerateClusterContent = (clusterId: string) => {
+    setClusterContentLoading(prev => ({ ...prev, [clusterId]: true }));
+    setClusterContentError(prev => ({ ...prev, [clusterId]: '' }));
+    setClusterContentStatus(prev => ({ ...prev, [clusterId]: 'Starting…' }));
+
+    if (preferences.learningStyle === 'audio') {
+      const params = new URLSearchParams({
+        clusterId,
+        preferences: encodeURIComponent(JSON.stringify(preferences)),
+      });
+      const es = new EventSource(`/api/podcast/generate?${params}`);
+
+      es.addEventListener('status', (e: MessageEvent) => {
+        const data = JSON.parse(e.data);
+        setClusterContentStatus(prev => ({ ...prev, [clusterId]: data.msg }));
+        setClusterContentError(prev => ({ ...prev, [clusterId]: '' }));
+      });
+
+      es.addEventListener('done', (e: MessageEvent) => {
+        const data = JSON.parse(e.data);
+        es.close();
+        if (data.url) {
+          setClusterContents(prev => ({
+            ...prev,
+            [clusterId]: { podcastUrl: data.url, sources: data.sources || [] },
+          }));
+          setClusterContentStatus(prev => ({ ...prev, [clusterId]: '' }));
+        } else {
+          setClusterContentError(prev => ({ ...prev, [clusterId]: 'No audio URL returned.' }));
+        }
+        setClusterContentLoading(prev => ({ ...prev, [clusterId]: false }));
+      });
+
+      es.addEventListener('error', (e: Event) => {
+        es.close();
+        try {
+          const data = JSON.parse((e as MessageEvent).data);
+          setClusterContentError(prev => ({ ...prev, [clusterId]: data.error || 'Unknown error' }));
+        } catch {
+          setClusterContentError(prev => ({ ...prev, [clusterId]: 'Connection lost or server error.' }));
+        }
+        setClusterContentStatus(prev => ({ ...prev, [clusterId]: '' }));
+        setClusterContentLoading(prev => ({ ...prev, [clusterId]: false }));
+      });
+
+      es.onerror = () => {
+        es.close();
+        setClusterContentError(prev => ({ ...prev, [clusterId]: prev[clusterId] || 'Connection lost.' }));
+        setClusterContentStatus(prev => ({ ...prev, [clusterId]: '' }));
+        setClusterContentLoading(prev => ({ ...prev, [clusterId]: false }));
+      };
+    } else {
+      setClusterContentStatus(prev => ({ ...prev, [clusterId]: 'Generating text…' }));
+      fetch('/api/content/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferences, source: { clusterId } }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error) {
+            setClusterContents(prev => ({
+              ...prev,
+              [clusterId]: { content: data.content || '', sources: data.sources || [] },
+            }));
+          } else {
+            setClusterContentError(prev => ({ ...prev, [clusterId]: data.error }));
+          }
+        })
+        .catch(err => setClusterContentError(prev => ({ ...prev, [clusterId]: (err as Error).message })))
+        .finally(() => {
+          setClusterContentLoading(prev => ({ ...prev, [clusterId]: false }));
+          setClusterContentStatus(prev => ({ ...prev, [clusterId]: '' }));
+        });
+    }
+  };
+
+  const handleGenerateClusterFlashcards = async (clusterId: string) => {
+    setClusterFlashcardLoading(prev => ({ ...prev, [clusterId]: true }));
+    setClusterFlashcardError(prev => ({ ...prev, [clusterId]: '' }));
+    try {
+      const res = await fetch('/api/flashcards/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clusterId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate flashcards');
+      setClusterFlashcards(prev => ({ ...prev, [clusterId]: data.flashcards || [] }));
+    } catch (err) {
+      setClusterFlashcardError(prev => ({ ...prev, [clusterId]: (err as Error).message }));
+    } finally {
+      setClusterFlashcardLoading(prev => ({ ...prev, [clusterId]: false }));
+    }
+  };
 
   const fetchBookmarks = async () => {
     setLoading(true);
@@ -529,6 +742,233 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* User Content Preferences */}
+        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
+          <button
+            onClick={() => setPreferencesOpen(!preferencesOpen)}
+            className="flex items-center gap-2 text-lg font-semibold text-[#29b5e8] hover:text-[#1e9fd4] w-full text-left"
+          >
+            {preferencesOpen ? '▼' : '▶'} Content preferences
+          </button>
+          {preferencesOpen && (
+            <form
+              className="mt-6 space-y-4"
+              onSubmit={(e) => e.preventDefault()}
+            >
+              {/* Learning style */}
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  {SURVEY_CONFIG.survey.learningStyle.question}
+                </label>
+                <div className="space-y-2">
+                  {SURVEY_CONFIG.survey.learningStyle.options.map(opt => (
+                    <label
+                      key={opt.id}
+                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        preferences.learningStyle === opt.id
+                          ? 'border-[#29b5e8] bg-[#29b5e8]/10'
+                          : 'border-white/20 bg-white/5 hover:border-white/30'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="learningStyle"
+                        value={opt.id}
+                        checked={preferences.learningStyle === opt.id}
+                        onChange={() => setPreferences(p => ({ ...p, learningStyle: opt.id as 'verbal' | 'audio' }))}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <span className="text-white font-medium">{opt.label}</span>
+                        <p className="text-white/60 text-xs mt-0.5">{opt.description}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Verbal options */}
+              {preferences.learningStyle === 'verbal' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-1">
+                      {SURVEY_CONFIG.survey.verbal.textFormat.question}
+                    </label>
+                    <select
+                      value={preferences.textFormat || 'bullet'}
+                      onChange={e => setPreferences(p => ({ ...p, textFormat: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                    >
+                      {SURVEY_CONFIG.survey.verbal.textFormat.options.map(o => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-1">
+                      {SURVEY_CONFIG.survey.verbal.jargonLevel.question}
+                    </label>
+                    <select
+                      value={preferences.jargonLevel || 'some'}
+                      onChange={e => setPreferences(p => ({ ...p, jargonLevel: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                    >
+                      {SURVEY_CONFIG.survey.verbal.jargonLevel.options.map(o => (
+                        <option key={o.id} value={o.id}>
+                          {o.label} — {o.description}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-1">
+                      {SURVEY_CONFIG.survey.verbal.interests.question}
+                    </label>
+                    {SURVEY_CONFIG.survey.verbal.interests.description && (
+                      <p className="text-white/60 text-xs mb-2">{SURVEY_CONFIG.survey.verbal.interests.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {SURVEY_CONFIG.survey.verbal.interests.options.map(opt => (
+                        <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(preferences.interests || []).includes(opt)}
+                            onChange={() => toggleInterest(opt)}
+                            className="rounded border-white/30 bg-white/5 text-[#29b5e8] focus:ring-[#29b5e8]"
+                          />
+                          <span className="text-sm text-white/90">{opt}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {SURVEY_CONFIG.survey.verbal.interests.allowCustom && (
+                      <input
+                        type="text"
+                        value={preferences.customInterests || ''}
+                        onChange={e => setPreferences(p => ({ ...p, customInterests: e.target.value }))}
+                        placeholder="Custom (e.g. Valorant, Cooking)"
+                        className="mt-2 w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8] text-sm"
+                      />
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Audio options */}
+              {preferences.learningStyle === 'audio' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-1">
+                      {SURVEY_CONFIG.survey.audio.podcastLength.question}
+                    </label>
+                    <select
+                      value={preferences.podcastLength || 'medium'}
+                      onChange={e => setPreferences(p => ({ ...p, podcastLength: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                    >
+                      {SURVEY_CONFIG.survey.audio.podcastLength.options.map(o => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-1">
+                      {SURVEY_CONFIG.survey.audio.podcastStyle.question}
+                    </label>
+                    <select
+                      value={preferences.podcastStyle || 'educational'}
+                      onChange={e => setPreferences(p => ({ ...p, podcastStyle: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                    >
+                      {SURVEY_CONFIG.survey.audio.podcastStyle.options.map(o => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* Background */}
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-1">
+                  {SURVEY_CONFIG.survey.background.question}
+                </label>
+                {SURVEY_CONFIG.survey.background.description && (
+                  <p className="text-white/60 text-xs mb-2">{SURVEY_CONFIG.survey.background.description}</p>
+                )}
+                <select
+                  value={preferences.background}
+                  onChange={e => setPreferences(p => ({ ...p, background: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#29b5e8]"
+                >
+                  {SURVEY_CONFIG.survey.background.options.map(o => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+                {SURVEY_CONFIG.survey.background.allowDetails && (
+                  <textarea
+                    value={preferences.backgroundDetails || ''}
+                    onChange={e => setPreferences(p => ({ ...p, backgroundDetails: e.target.value }))}
+                    placeholder={SURVEY_CONFIG.survey.background.detailsPlaceholder}
+                    rows={2}
+                    className="mt-2 w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8] resize-y"
+                  />
+                )}
+              </div>
+
+              {/* Extra notes */}
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-1">
+                  {SURVEY_CONFIG.survey.extraNotes.question}
+                  {SURVEY_CONFIG.survey.extraNotes.optional && (
+                    <span className="text-white/50 font-normal ml-1">(optional)</span>
+                  )}
+                </label>
+                {SURVEY_CONFIG.survey.extraNotes.description && (
+                  <p className="text-white/60 text-xs mb-2">{SURVEY_CONFIG.survey.extraNotes.description}</p>
+                )}
+                <textarea
+                  value={preferences.extraNotes || ''}
+                  onChange={e => setPreferences(p => ({ ...p, extraNotes: e.target.value }))}
+                  placeholder={SURVEY_CONFIG.survey.extraNotes.placeholder}
+                  rows={2}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-[#29b5e8] resize-y"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGenerateContent}
+                disabled={contentLoading}
+                className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+              >
+                {contentLoading ? 'Generating...' : 'Generate content'}
+              </button>
+
+              {contentError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm">
+                  {contentError}
+                </div>
+              )}
+
+              {generatedContent && (
+                <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-lg">
+                  <h3 className="text-sm font-medium text-[#29b5e8] mb-2">Generated content</h3>
+                  <div className="text-white/90 text-sm whitespace-pre-wrap font-sans max-h-96 overflow-y-auto">
+                    {generatedContent}
+                  </div>
+                </div>
+              )}
+
+              {generatedPodcastUrl && preferences.learningStyle === 'audio' && (
+                <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-lg">
+                  <h3 className="text-sm font-medium text-[#29b5e8] mb-2">Generated podcast</h3>
+                  <audio src={generatedPodcastUrl} controls className="w-full max-w-md" />
+                </div>
+              )}
+            </form>
+          )}
+        </div>
+
         {/* Learning Clusters */}
         <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -579,6 +1019,123 @@ export default function Dashboard() {
                   <div className="text-xs text-white/50">
                     Difficulty: <span className="text-white/70">{cluster.avgDifficulty}</span>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Content Generation (per cluster) */}
+        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-[#29b5e8] mb-1">✨ Content Generation</h2>
+            <p className="text-white/60 text-sm">
+              Generate personalized study content for each learning cluster. Uses your content preferences and references articles meaningfully.
+            </p>
+          </div>
+
+          {clusters.length === 0 ? (
+            <div className="text-center py-8 text-white/50 italic">
+              Generate clusters first to create content for each group.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {clusters.map((cluster) => (
+                <div key={cluster.id} className="bg-white/5 rounded-lg p-5 border border-white/10">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <h3 className="font-semibold text-white">{cluster.name}</h3>
+                      <p className="text-white/60 text-sm mt-0.5">{cluster.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateClusterContent(cluster.id)}
+                      disabled={clusterContentLoading[cluster.id]}
+                      className="shrink-0 bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      {clusterContentLoading[cluster.id] ? 'Generating…' : clusterContents[cluster.id] ? 'Regenerate' : 'Generate content'}
+                    </button>
+                  </div>
+
+                  {clusterContentStatus[cluster.id] && !clusterContentError[cluster.id] && (
+                    <div className="mb-3 p-3 bg-[#29b5e8]/10 border border-[#29b5e8]/20 rounded text-[#29b5e8] text-sm">
+                      {clusterContentStatus[cluster.id]}
+                    </div>
+                  )}
+
+                  {clusterContentError[cluster.id] && (
+                    <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm">
+                      {clusterContentError[cluster.id]}
+                    </div>
+                  )}
+
+                  {clusterContents[cluster.id] && (
+                    <div className="mt-4 space-y-3">
+                      {clusterContents[cluster.id].podcastUrl ? (
+                        <div>
+                          <h4 className="text-xs font-medium text-[#29b5e8] uppercase tracking-wider mb-2">Podcast</h4>
+                          <audio
+                            src={clusterContents[cluster.id].podcastUrl}
+                            controls
+                            className="w-full max-w-md"
+                          />
+                        </div>
+                      ) : clusterContents[cluster.id].content ? (
+                        <div className="p-4 bg-black/20 rounded-lg border border-white/5">
+                          <div className="text-white/90 text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                            {clusterContents[cluster.id].content}
+                          </div>
+                        </div>
+                      ) : null}
+                      {clusterContents[cluster.id].sources.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-medium text-[#29b5e8] uppercase tracking-wider mb-2">References</h4>
+                          <ul className="space-y-1.5">
+                            {clusterContents[cluster.id].sources.map((src, idx) => (
+                              <li key={idx} className="text-sm">
+                                <a
+                                  href={src.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[#29b5e8] hover:text-[#5dc9f0] hover:underline break-all"
+                                >
+                                  {src.title || src.url}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="pt-3 border-t border-white/10 mt-3">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateClusterFlashcards(cluster.id)}
+                          disabled={clusterFlashcardLoading[cluster.id]}
+                          className="text-sm bg-white/10 hover:bg-white/20 text-white/90 px-3 py-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {clusterFlashcardLoading[cluster.id] ? 'Generating…' : clusterFlashcards[cluster.id] ? 'Regenerate flashcards' : 'Generate flashcards'}
+                        </button>
+                        {clusterFlashcardError[cluster.id] && (
+                          <p className="text-red-400 text-xs mt-2">{clusterFlashcardError[cluster.id]}</p>
+                        )}
+                        {clusterFlashcards[cluster.id]?.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            {clusterFlashcards[cluster.id].map((fc, idx) => (
+                              <details key={idx} className="bg-black/20 rounded-lg border border-white/5">
+                                <summary className="px-3 py-2 cursor-pointer text-sm text-white/90 hover:bg-white/5 rounded-lg">
+                                  Q: {fc.question}
+                                </summary>
+                                <div className="px-3 py-2 text-sm text-white/70 border-t border-white/5">
+                                  A: {fc.answer}
+                                </div>
+                              </details>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
