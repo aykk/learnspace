@@ -93,11 +93,12 @@ export async function insertIR(ir: {
   estimatedReadTime?: number;
   rawText?: string;
 }): Promise<void> {
+  // Use SELECT with PARSE_JSON() instead of VALUES to avoid bind parameter issues
   await execute(
     `INSERT INTO INTERMEDIATE_REPRESENTATIONS 
      (ID, VERSION, BOOKMARK_ID, SOURCE_URL, SOURCE_TITLE, SUMMARY, KEY_TOPICS, CONCEPTS, 
       DIFFICULTY, CONTENT_TYPE, ESTIMATED_READ_TIME, RAW_TEXT)
-     VALUES (?, ?, ?, ?, ?, ?, PARSE_JSON(?), PARSE_JSON(?), ?, ?, ?, ?)`,
+     SELECT ?, ?, ?, ?, ?, ?, PARSE_JSON(?), PARSE_JSON(?), ?, ?, ?, ?`,
     [
       ir.id,
       ir.version,

@@ -8,11 +8,28 @@ interface Bookmark {
   URL: string;
   TITLE: string | null;
   DATE_ADDED: string | null;
-  _LOAD_TIME: string;
+  _LOAD_TIME?: string;
+  LOAD_TIME?: string;
+}
+
+interface IR {
+  id: string;
+  bookmarkId: number;
+  summary: string;
+  keyTopics: string[];
+  concepts: Array<{
+    name: string;
+    description: string;
+    importance: string;
+  }>;
+  difficulty: string;
+  contentType: string;
+  estimatedReadTime?: number;
 }
 
 export default function Dashboard() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [irs, setIrs] = useState<Record<number, IR>>({});
   const [loading, setLoading] = useState(true);
   const [podcastStatus, setPodcastStatus] = useState('');
   const [podcastError, setPodcastError] = useState(false);
@@ -24,14 +41,32 @@ export default function Dashboard() {
   const [newTitle, setNewTitle] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
+  
+  // IR extraction state
+  const [extractingIR, setExtractingIR] = useState<Record<number, boolean>>({});
 
   const fetchBookmarks = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/bookmarks');
       const data = await res.json();
-      // Ensure we always set an array, even if API returns an error object
-      setBookmarks(Array.isArray(data) ? data : []);
+      const bookmarkList = Array.isArray(data) ? data : [];
+      setBookmarks(bookmarkList);
+      
+      // Fetch IRs for each bookmark
+      const irMap: Record<number, IR> = {};
+      for (const bookmark of bookmarkList) {
+        try {
+          const irRes = await fetch(`/api/ir/extract?bookmarkId=${bookmark.ID}`);
+          if (irRes.ok) {
+            const irData = await irRes.json();
+            irMap[bookmark.ID] = irData.ir;
+          }
+        } catch (err) {
+          // IR doesn't exist yet, that's ok
+        }
+      }
+      setIrs(irMap);
     } catch (error) {
       console.error('Failed to fetch bookmarks:', error);
       setBookmarks([]);
@@ -43,6 +78,39 @@ export default function Dashboard() {
   useEffect(() => {
     fetchBookmarks();
   }, []);
+
+  // Auto-poll for IRs when there are bookmarks without extracted IRs
+  useEffect(() => {
+    // Check if any bookmarks are missing IRs
+    const pendingBookmarks = bookmarks.filter(b => !irs[b.ID] && !extractingIR[b.ID]);
+    
+    if (pendingBookmarks.length > 0 && !loading) {
+      // Poll every 3 seconds to check for completed IR extractions
+      const pollInterval = setInterval(async () => {
+        let hasNewIR = false;
+        const newIrs = { ...irs };
+        
+        for (const bookmark of pendingBookmarks) {
+          try {
+            const irRes = await fetch(`/api/ir/extract?bookmarkId=${bookmark.ID}`);
+            if (irRes.ok) {
+              const irData = await irRes.json();
+              newIrs[bookmark.ID] = irData.ir;
+              hasNewIR = true;
+            }
+          } catch {
+            // IR doesn't exist yet
+          }
+        }
+        
+        if (hasNewIR) {
+          setIrs(newIrs);
+        }
+      }, 3000);
+      
+      return () => clearInterval(pollInterval);
+    }
+  }, [bookmarks, irs, extractingIR, loading]);
 
   const handleAddBookmark = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +155,34 @@ export default function Dashboard() {
       fetchBookmarks();
     } catch (error) {
       console.error('Failed to delete bookmark:', error);
+    }
+  };
+
+  const handleExtractIR = async (bookmark: Bookmark) => {
+    setExtractingIR(prev => ({ ...prev, [bookmark.ID]: true }));
+    try {
+      const res = await fetch('/api/ir/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookmarkId: bookmark.ID,
+          url: bookmark.URL,
+          title: bookmark.TITLE,
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setIrs(prev => ({ ...prev, [bookmark.ID]: data.ir }));
+      } else {
+        const err = await res.json();
+        alert(`Failed to extract IR: ${err.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to extract IR:', error);
+      alert('Network error extracting IR');
+    } finally {
+      setExtractingIR(prev => ({ ...prev, [bookmark.ID]: false }));
     }
   };
 
@@ -245,8 +341,7 @@ export default function Dashboard() {
                     <th className="px-4 py-3 text-left font-semibold">ID</th>
                     <th className="px-4 py-3 text-left font-semibold">URL</th>
                     <th className="px-4 py-3 text-left font-semibold">TITLE</th>
-                    <th className="px-4 py-3 text-left font-semibold">DATE_ADDED</th>
-                    <th className="px-4 py-3 text-left font-semibold">_LOAD_TIME</th>
+                    <th className="px-4 py-3 text-left font-semibold">IR Status</th>
                     <th className="px-4 py-3 text-left font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -267,13 +362,36 @@ export default function Dashboard() {
                       <td className="px-4 py-3 text-white/80 truncate max-w-xs">
                         {bookmark.TITLE || '—'}
                       </td>
-                      <td className="px-4 py-3 text-white/60 text-xs">
-                        {bookmark.DATE_ADDED || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-white/60 text-xs">
-                        {bookmark._LOAD_TIME}
-                      </td>
                       <td className="px-4 py-3">
+                        {irs[bookmark.ID] ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-green-400 text-xs">✓ Extracted</span>
+                            <button
+                              onClick={() => {
+                                const ir = irs[bookmark.ID];
+                                alert(`IR Summary:\n\n${ir.summary}\n\nTopics: ${ir.keyTopics.join(', ')}\n\nDifficulty: ${ir.difficulty}\nType: ${ir.contentType}`);
+                              }}
+                              className="text-[#29b5e8] hover:underline text-xs"
+                            >
+                              View
+                            </button>
+                          </div>
+                        ) : extractingIR[bookmark.ID] ? (
+                          <span className="text-yellow-400 text-xs animate-pulse">Extracting...</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-yellow-400/70 text-xs animate-pulse">⏳ Processing...</span>
+                            <button
+                              onClick={() => handleExtractIR(bookmark)}
+                              className="text-white/40 hover:text-[#29b5e8] text-xs"
+                              title="Force re-extract"
+                            >
+                              ↻
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 flex gap-2">
                         <button
                           onClick={() => handleDeleteBookmark(bookmark.URL)}
                           className="text-red-400 hover:text-red-300 text-xs"

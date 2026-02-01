@@ -101,6 +101,18 @@ export async function GET(request: NextRequest) {
 }
 
 function parseIRRecord(record: any) {
+  // Handle both string (needs parsing) and object (already parsed) from Snowflake VARIANT
+  const parseJsonField = (field: any) => {
+    if (typeof field === 'string') {
+      try {
+        return JSON.parse(field);
+      } catch {
+        return field;
+      }
+    }
+    return field;
+  };
+
   return {
     id: record.ID,
     version: record.VERSION,
@@ -109,8 +121,8 @@ function parseIRRecord(record: any) {
     sourceTitle: record.SOURCE_TITLE,
     createdAt: record.CREATED_AT,
     summary: record.SUMMARY,
-    keyTopics: JSON.parse(record.KEY_TOPICS),
-    concepts: JSON.parse(record.CONCEPTS),
+    keyTopics: parseJsonField(record.KEY_TOPICS),
+    concepts: parseJsonField(record.CONCEPTS),
     difficulty: record.DIFFICULTY,
     contentType: record.CONTENT_TYPE,
     estimatedReadTime: record.ESTIMATED_READ_TIME,

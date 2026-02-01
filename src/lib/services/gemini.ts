@@ -44,7 +44,7 @@ export async function extractIRFromUrl(url: string, title: string | null): Promi
       }],
       generationConfig: {
         temperature: 0.3, // Lower for more consistent extraction
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096, // Increased for longer responses
       }
     }),
   });
@@ -106,9 +106,23 @@ Return ONLY the JSON object, no additional text.`;
 
 function parseGeminiIRResponse(text: string): Partial<IntermediateRepresentation> {
   try {
-    // Try to extract JSON from markdown code blocks if present
-    const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-    const jsonText = jsonMatch ? jsonMatch[1] : text;
+    // Remove markdown code blocks if present
+    let jsonText = text.trim();
+    
+    // Remove ```json and ``` markers
+    if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    
+    // Find the JSON object boundaries
+    const startIdx = jsonText.indexOf('{');
+    const endIdx = jsonText.lastIndexOf('}');
+    
+    if (startIdx === -1 || endIdx === -1) {
+      throw new Error('No JSON object found in response');
+    }
+    
+    jsonText = jsonText.substring(startIdx, endIdx + 1);
 
     const parsed = JSON.parse(jsonText);
 
