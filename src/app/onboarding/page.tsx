@@ -178,7 +178,7 @@ export default function Onboarding() {
           <div 
             className="h-full transition-all duration-500 ease-out"
             style={{ 
-              width: surveyComplete ? "100%" : `${(step / totalSteps) * 100}%`,
+              width: surveyComplete ? "100%" : `${((step - 1) / (totalSteps - 1)) * 100}%`,
               backgroundColor: "#e07850" 
             }}
           />

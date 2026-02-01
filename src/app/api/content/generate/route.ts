@@ -44,8 +44,16 @@ function buildSystemPrompt(prefs: UserContentPreferences): string {
     lines.push(
       '',
       'STRICT FORMAT RULES (verbal/text output):',
-      `- **Text format**: Use ONLY ${prefs.textFormat || 'bullet'} format (bullet = bullet points, paragraph = continuous paragraphs, mixed = mix both). Do not deviate.`,
+      '- **Output format**: You MUST output content in Markdown format with proper structure:',
+      '  * Use # for main title, ## for major sections, ### for subsections',
+      '  * Use bullet points (- or *) for lists when appropriate',
+      '  * Use **bold** for emphasis on important concepts',
+      '  * Use *italic* for subtle emphasis',
+      '  * Organize content with clear headers and logical flow',
+      '  * Use code blocks (```) for technical terms or code examples when relevant',
+      `- **Text format**: Use ${prefs.textFormat || 'bullet'} format (bullet = bullet points, paragraph = continuous paragraphs, mixed = mix both) within the markdown structure.`,
       `- **Technical jargon**: ${prefs.jargonLevel || 'some'} — none = plain language only, some = light terminology, technical = full specialized terms. Stay within this level.`,
+      '- **Key terms**: Identify 5-10 key technical terms or jargon words that are central to understanding the content. Wrap these terms with double underscores (__term__) so they can be underlined and made clickable for definitions. Only mark truly important terms that need explanation.',
       interestsList.length
         ? `- **Analogies**: Incorporate the user's interests (${interestsList.join(', ')}) when drawing analogies or examples. Use these topics to explain complex ideas when applicable.`
         : ''
@@ -123,7 +131,15 @@ export async function POST(request: NextRequest) {
         irIds = [];
       }
       const clusterIRs = irs.filter(ir => irIds.includes(ir.ID));
-      const sources = clusterIRs.map(ir => ({ title: ir.SOURCE_TITLE || ir.SOURCE_URL, url: ir.SOURCE_URL }));
+      // Deduplicate sources by URL
+      const seenSourceUrls = new Set<string>();
+      const sources = clusterIRs
+        .map(ir => ({ title: ir.SOURCE_TITLE || ir.SOURCE_URL, url: ir.SOURCE_URL }))
+        .filter(source => {
+          if (!source.url || seenSourceUrls.has(source.url)) return false;
+          seenSourceUrls.add(source.url);
+          return true;
+        });
       const articlesBlock = clusterIRs.map((ir, i) => {
         const topics = Array.isArray(ir.KEY_TOPICS) ? ir.KEY_TOPICS : (typeof ir.KEY_TOPICS === 'string' ? [ir.KEY_TOPICS] : []);
         return `[${i + 1}] "${ir.SOURCE_TITLE || ir.SOURCE_URL}" (${ir.SOURCE_URL})\n   Summary: ${ir.SUMMARY}\n   Topics: ${topics.join(', ')}`;
@@ -154,6 +170,10 @@ Context:\n\n${contextBlock}`;
           const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
           if (text) {
             return NextResponse.json({ content: text, sources });
+          } else {
+            // No text returned - try next model
+            lastError = 'No content generated from model';
+            continue;
           }
         } else {
           const err = await res.json().catch(() => ({}));

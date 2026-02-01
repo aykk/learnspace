@@ -157,7 +157,109 @@ export default function Dashboard() {
   const [contentLoading, setContentLoading] = useState(false);
   const [contentStatus, setContentStatus] = useState<string>('');
   const [flashcardLoading, setFlashcardLoading] = useState(false);
+  const [contentWindowOpen, setContentWindowOpen] = useState(false);
+  const [contentWindowCluster, setContentWindowCluster] = useState<Cluster | null>(null);
+  const [flashcardWindowOpen, setFlashcardWindowOpen] = useState(false);
+  const [flashcardWindowCluster, setFlashcardWindowCluster] = useState<Cluster | null>(null);
+  const [selectedJargon, setSelectedJargon] = useState<string | null>(null);
+  const [jargonDefinition, setJargonDefinition] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const clusterRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Render markdown and handle jargon terms
+  const renderMarkdownWithJargon = useCallback((content: string) => {
+    // First, extract jargon terms before processing markdown
+    const jargonTerms: string[] = [];
+    const jargonPattern = /__([^_]+)__/g;
+    let match;
+    while ((match = jargonPattern.exec(content)) !== null) {
+      jargonTerms.push(match[1]);
+    }
+
+    // Simple markdown to HTML conversion
+    let html = content
+      // Code blocks first (to avoid processing markdown inside them)
+      .replace(/```([\s\S]*?)```/g, '<pre class="bg-neutral-100 p-4 rounded-sm overflow-x-auto my-4 font-mono text-sm"><code>$1</code></pre>')
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code class="bg-neutral-100 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
+      // Headers
+      .replace(/^### (.*$)/gim, '<h3 class="text-xl font-semibold text-neutral-900 mt-6 mb-3 font-[family-name:var(--font-display)]">$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-semibold text-neutral-900 mt-8 mb-4 font-[family-name:var(--font-display)]">$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-semibold text-neutral-900 mt-10 mb-5 font-[family-name:var(--font-display)]">$1</h1>')
+      // Bold (but not inside code)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-neutral-900">$1</strong>')
+      // Italic (but not inside code)
+      .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em class="italic">$1</em>')
+      // Bullet points
+      .replace(/^- (.*$)/gim, '<li class="ml-6 mb-2 list-disc">$1</li>')
+      // Numbered lists
+      .replace(/^\d+\. (.*$)/gim, '<li class="ml-6 mb-2 list-decimal">$1</li>');
+
+    // Split by double newlines for paragraphs
+    const paragraphs = html.split(/\n\n+/);
+    html = paragraphs.map(p => {
+      p = p.trim();
+      if (!p) return '';
+      // Wrap in paragraph if it's not already a header, list, or code block
+      if (!p.match(/^<(h[1-6]|ul|ol|pre|li)/)) {
+        return `<p class="mb-4 leading-relaxed text-neutral-700">${p}</p>`;
+      }
+      // Wrap list items in ul/ol
+      if (p.includes('<li')) {
+        const isNumbered = p.includes('list-decimal');
+        return `<${isNumbered ? 'ol' : 'ul'} class="mb-4 space-y-1">${p}</${isNumbered ? 'ol' : 'ul'}>`;
+      }
+      return p;
+    }).join('');
+
+    // Handle jargon terms (__term__) - make them clickable and underlined
+    html = html.replace(/__([^_]+)__/g, (match, term) => {
+      const escapedTerm = term.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+      return `<span 
+        class="underline cursor-pointer text-[#e07850] hover:text-[#c86540] transition-colors font-medium"
+        onClick="window.handleJargonClick && window.handleJargonClick('${escapedTerm}')"
+      >${term}</span>`;
+    });
+
+    return html;
+  }, []);
+
+  // Handle jargon click - fetch definition from Gemini
+  const handleJargonClick = useCallback(async (term: string) => {
+    setSelectedJargon(term);
+    setJargonDefinition(null); // Clear previous definition
+    
+    try {
+      // Get context from the current cluster's content if available
+      const context = contentWindowCluster?.generatedContent?.content 
+        ? contentWindowCluster.generatedContent.content.substring(0, 500) // First 500 chars for context
+        : undefined;
+
+      const response = await fetch('/api/jargon/define', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ term, context }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch definition');
+      }
+
+      const data = await response.json();
+      setJargonDefinition(data.definition || `No definition found for "${term}".`);
+    } catch (error) {
+      console.error('Jargon definition error:', error);
+      setJargonDefinition(`Unable to load definition for "${term}". Please try again.`);
+    }
+  }, [contentWindowCluster]);
+
+  // Make handleJargonClick available globally for onClick handlers
+  useEffect(() => {
+    (window as any).handleJargonClick = handleJargonClick;
+    return () => {
+      delete (window as any).handleJargonClick;
+    };
+  }, [handleJargonClick]);
   const zoomContentRef = useRef<HTMLDivElement>(null); // inner scaled world for drag coords
   const hasDraggedRef = useRef(false);
   const dragStartPosRef = useRef<{x: number; y: number} | null>(null);
@@ -217,12 +319,17 @@ export default function Dashboard() {
         
         // Build links from IRs that belong to this cluster
         const links: ClusterLink[] = [];
+        const seenUrls = new Set<string>(); // Track URLs to prevent duplicates
         irIds.forEach((irId: number | string) => {
           const ir = allIRs.find((i: any) => 
             i.id === irId || i.ID === irId || i.id === String(irId) || i.ID === String(irId)
           );
           if (ir) {
             const url = ir.sourceUrl || ir.SOURCE_URL || ir.url || '';
+            // Skip if URL is empty or already seen
+            if (!url || seenUrls.has(url)) return;
+            seenUrls.add(url);
+            
             let hostname = 'Unknown';
             try {
               if (url) hostname = new URL(url).hostname;
@@ -371,6 +478,7 @@ export default function Dashboard() {
           
           if (data.done) {
             // Update cluster with podcast URL and sources
+            const updatedCluster = { ...clusters.find(c => c.id === clusterId)! };
             updateCluster(clusterId, {
               generatedContent: {
                 podcastUrl: data.url,
@@ -406,11 +514,15 @@ export default function Dashboard() {
           }),
         });
 
-        if (!response.ok) throw new Error('Failed to generate content');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `Failed to generate content (${response.status})`);
+        }
         
         const data = await response.json();
         
         // Update cluster with generated content
+        const updatedCluster = { ...clusters.find(c => c.id === clusterId)! };
         updateCluster(clusterId, {
           generatedContent: {
             content: data.content,
@@ -422,7 +534,8 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Content generation error:', error);
-      alert('Failed to generate content. See console for details.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate content';
+      alert(`Failed to generate content: ${errorMessage}`);
       setContentLoading(false);
     }
   };
@@ -444,11 +557,10 @@ export default function Dashboard() {
       // Update cluster with flashcards
       updateCluster(clusterId, { flashcards });
       
-      alert(`Generated ${flashcards.length} flashcards!`);
+      setFlashcardLoading(false);
     } catch (error) {
       console.error('Flashcard generation error:', error);
       alert('Failed to generate flashcards. See console for details.');
-    } finally {
       setFlashcardLoading(false);
     }
   };
@@ -554,7 +666,7 @@ export default function Dashboard() {
   }, [isDragging, handleDragMove, handleDragEnd]);
 
   const getClusterSize = (size: number) => {
-    const baseSize = 80;
+    const baseSize = 120; // Increased from 80
     return baseSize + (size * 30);
   };
 
@@ -818,6 +930,10 @@ export default function Dashboard() {
             return (
               <div
                 key={cluster.id}
+                ref={(el) => {
+                  if (el) clusterRefs.current.set(cluster.id, el);
+                  else clusterRefs.current.delete(cluster.id);
+                }}
                 data-cluster={cluster.id}
                 onMouseUp={() => handleClusterClick(cluster)}
                 onMouseDown={(e) => handleDragStart(e, cluster.id)}
@@ -988,54 +1104,6 @@ export default function Dashboard() {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Generated Content Section */}
-              {selectedCluster.generatedContent && (
-                <div>
-                  <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3 font-[family-name:var(--font-body)]">
-                    Generated Content
-                  </h3>
-                  
-                  {/* Text Content */}
-                  {selectedCluster.generatedContent.content && (
-                    <div className="prose prose-sm max-w-none text-neutral-700 font-[family-name:var(--font-body)]">
-                      <div dangerouslySetInnerHTML={{ __html: selectedCluster.generatedContent.content.replace(/\n/g, '<br />') }} />
-                    </div>
-                  )}
-                  
-                  {/* Podcast Audio Player */}
-                  {selectedCluster.generatedContent.podcastUrl && (
-                    <div className="bg-white/50 rounded-sm p-4">
-                      <audio controls className="w-full">
-                        <source src={selectedCluster.generatedContent.podcastUrl} type="audio/mpeg" />
-                        Your browser does not support the audio element.
-                      </audio>
-                    </div>
-                  )}
-                  
-                  {/* Sources/References */}
-                  {selectedCluster.generatedContent.sources && selectedCluster.generatedContent.sources.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2 font-[family-name:var(--font-body)]">
-                        References
-                      </h4>
-                      <div className="space-y-1">
-                        {selectedCluster.generatedContent.sources.map((source, idx) => (
-                          <a
-                            key={idx}
-                            href={source.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block text-xs text-[#e07850] hover:underline font-[family-name:var(--font-body)]"
-                          >
-                            [{idx + 1}] {source.title}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Summary */}
               <div>
                 <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3 font-[family-name:var(--font-body)]">
@@ -1081,10 +1149,10 @@ export default function Dashboard() {
                       rel="noopener noreferrer"
                       className="block p-3 bg-white/50 hover:bg-white/80 rounded-sm transition-colors duration-200 group"
                     >
-                      <p className="text-sm text-neutral-800 font-[family-name:var(--font-body)] group-hover:text-neutral-900">
+                      <p className="text-sm font-semibold text-neutral-900 font-[family-name:var(--font-body)] group-hover:text-neutral-900 mb-1">
                         {link.title}
                       </p>
-                      <p className="text-xs text-neutral-500 font-[family-name:var(--font-body)] mt-1">
+                      <p className="text-xs text-neutral-500 font-[family-name:var(--font-body)]">
                         {link.source}
                       </p>
                     </a>
@@ -1116,7 +1184,7 @@ export default function Dashboard() {
 
             {/* View Content Button */}
             <div className="p-6 border-t border-neutral-300/50 space-y-2">
-              {!selectedCluster.generatedContent && (
+              {!selectedCluster.generatedContent ? (
                 <>
                   <button 
                     onClick={() => handleGenerateContent(selectedCluster.id)}
@@ -1132,22 +1200,221 @@ export default function Dashboard() {
                     </p>
                   )}
                 </>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setContentWindowCluster(selectedCluster);
+                    setContentWindowOpen(true);
+                  }}
+                  className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
+                  style={{ backgroundColor: selectedCluster.color }}
+                >
+                  View Content
+                </button>
               )}
               
-              {selectedCluster.generatedContent && !selectedCluster.flashcards && (
+              {!selectedCluster.flashcards ? (
                 <button 
                   onClick={() => handleGenerateFlashcards(selectedCluster.id)}
-                  disabled={flashcardLoading}
+                  disabled={flashcardLoading || !selectedCluster.generatedContent}
                   className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ backgroundColor: selectedCluster.color }}
                 >
                   {flashcardLoading ? 'Generating Flashcards...' : 'Generate Flashcards'}
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setFlashcardWindowCluster(selectedCluster);
+                    setFlashcardWindowOpen(true);
+                  }}
+                  className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
+                  style={{ backgroundColor: selectedCluster.color }}
+                >
+                  View Flashcards
                 </button>
               )}
             </div>
           </div>
         )}
       </aside>
+
+      {/* Content Window */}
+      {contentWindowOpen && contentWindowCluster && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          onClick={() => setContentWindowOpen(false)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          
+          {/* Content Window */}
+          <div 
+            className="relative w-[90vw] max-w-4xl h-[85vh] bg-white rounded-lg shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-neutral-200">
+              <h2 className="text-2xl font-semibold text-neutral-900 font-[family-name:var(--font-display)]">
+                {contentWindowCluster.name}
+              </h2>
+              <button 
+                onClick={() => setContentWindowOpen(false)}
+                className="text-neutral-500 hover:text-neutral-900 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 h-[calc(85vh-80px)] overflow-y-auto">
+              {contentWindowCluster.generatedContent?.content && (
+                <div 
+                  className="prose max-w-none font-[family-name:var(--font-body)]"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdownWithJargon(contentWindowCluster.generatedContent.content) }} 
+                />
+              )}
+              
+              {contentWindowCluster.generatedContent?.podcastUrl && (
+                <div className="space-y-4">
+                  <h3 className="text-xl font-semibold text-neutral-900 font-[family-name:var(--font-display)]">Podcast</h3>
+                  <audio controls className="w-full">
+                    <source src={contentWindowCluster.generatedContent.podcastUrl} type="audio/mpeg" />
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
+              )}
+              
+              {contentWindowCluster.generatedContent?.sources && contentWindowCluster.generatedContent.sources.length > 0 && (
+                <div className="mt-8 pt-6 border-t border-neutral-200">
+                  <h3 className="text-lg font-semibold text-neutral-900 font-[family-name:var(--font-display)] mb-4">Sources</h3>
+                  <div className="space-y-2">
+                    {contentWindowCluster.generatedContent.sources.map((source, idx) => (
+                      <a 
+                        key={idx}
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-sm text-[#e07850] hover:underline font-[family-name:var(--font-body)]"
+                      >
+                        {source.title || source.url}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Flashcard Window */}
+      {flashcardWindowOpen && flashcardWindowCluster && flashcardWindowCluster.flashcards && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          onClick={() => setFlashcardWindowOpen(false)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          
+          {/* Flashcard Window */}
+          <div 
+            className="relative w-[90vw] max-w-4xl h-[85vh] bg-white rounded-lg shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-neutral-200">
+              <h2 className="text-2xl font-semibold text-neutral-900 font-[family-name:var(--font-display)]">
+                {flashcardWindowCluster.name} - Flashcards
+              </h2>
+              <button 
+                onClick={() => setFlashcardWindowOpen(false)}
+                className="text-neutral-500 hover:text-neutral-900 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* Flashcards */}
+            <div className="p-6 h-[calc(85vh-80px)] overflow-y-auto">
+              <div className="space-y-4">
+                {flashcardWindowCluster.flashcards.map((card, idx) => (
+                  <div 
+                    key={idx}
+                    className="bg-white/80 border border-neutral-200 rounded-lg p-6 hover:shadow-lg transition-shadow"
+                  >
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider font-[family-name:var(--font-body)]">
+                          Question {idx + 1}
+                        </span>
+                        {card.source && (
+                          <span className="text-xs text-neutral-400 font-[family-name:var(--font-body)]">
+                            • {card.source}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-lg font-semibold text-neutral-900 font-[family-name:var(--font-display)] mb-3">
+                        {card.front}
+                      </p>
+                    </div>
+                    <div className="pt-4 border-t border-neutral-200">
+                      <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2 block font-[family-name:var(--font-body)]">
+                        Answer
+                      </span>
+                      <p className="text-base text-neutral-700 leading-relaxed font-[family-name:var(--font-body)]">
+                        {card.back}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Jargon Definition Modal */}
+      {selectedJargon && (
+        <div 
+          className="fixed inset-0 z-[110] flex items-center justify-center"
+          onClick={() => {
+            setSelectedJargon(null);
+            setJargonDefinition(null);
+          }}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div 
+            className="relative bg-white rounded-lg shadow-xl p-6 max-w-md w-[90vw]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-neutral-900 font-[family-name:var(--font-display)]">
+                {selectedJargon}
+              </h3>
+              <button 
+                onClick={() => {
+                  setSelectedJargon(null);
+                  setJargonDefinition(null);
+                }}
+                className="text-neutral-500 hover:text-neutral-900 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            {jargonDefinition ? (
+              <p className="text-neutral-700 font-[family-name:var(--font-body)] leading-relaxed">
+                {jargonDefinition}
+              </p>
+            ) : (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#e07850]"></div>
+                <span className="ml-3 text-neutral-500 font-[family-name:var(--font-body)]">Loading definition...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
