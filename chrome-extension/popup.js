@@ -1,3 +1,6 @@
+// Must match background.js — API base for Next.js app
+const API_BASE = 'http://localhost:3000';
+
 async function getLearnspaceFolderId() {
   const [root] = await chrome.bookmarks.getTree();
   const bar = root.children?.find(c => c.id === '1' || c.title === 'Bookmarks bar');
@@ -33,11 +36,28 @@ document.getElementById('add-btn').addEventListener('click', async () => {
       return;
     }
 
+    // Add to Chrome bookmarks
     await chrome.bookmarks.create({
       parentId: folderId,
       title: url,
       url
     });
+
+    // Send directly to API (don't rely on background listener)
+    const res = await fetch(`${API_BASE}/api/bookmarks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        title: url,
+        dateAdded: new Date().toISOString()
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || 'API request failed');
+    }
 
     input.value = '';
     msgEl.textContent = 'Added!';
