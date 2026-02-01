@@ -1,6 +1,73 @@
 /* eslint-disable @next/next/no-img-element */
+"use client";
+
+import { useState, useEffect } from "react";
 
 export default function Home() {
+  const [scrollY, setScrollY] = useState(0);
+  const [windowHeight, setWindowHeight] = useState(typeof window !== "undefined" ? window.innerHeight : 800);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+
+    const handleResize = () => {
+      setWindowHeight(window.innerHeight);
+    };
+
+    // Set initial values
+    handleScroll();
+    handleResize();
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleResize);
+    
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  // Phase calculations based on scroll position
+  // Phase 1: Hero (0 to 100vh) - circle at starting position, slight collapse
+  // Phase 2: Moving to About center (100vh to 150vh) - circle moves down and blooms orange
+  // Phase 3: About center to Features (150vh to 200vh) - circle stays, then collapses
+  
+  const heroEnd = windowHeight; // 100vh
+  const aboutCenter = windowHeight * 1.5; // 150vh  
+  const featuresStart = windowHeight * 2; // 200vh
+  
+  // Phase 1: Initial collapse during hero scroll (0 to 100vh)
+  const phase1Progress = windowHeight > 0 ? Math.min(scrollY / heroEnd, 1) : 0;
+  
+  // Phase 2: Bloom during about scroll (100vh to 150vh)
+  const phase2Progress = windowHeight > 0 ? Math.max(0, Math.min((scrollY - heroEnd) / (aboutCenter - heroEnd), 1)) : 0;
+  
+  // Phase 3: Final collapse before features (150vh to 200vh)
+  const phase3Progress = windowHeight > 0 ? Math.max(0, Math.min((scrollY - aboutCenter) / (featuresStart - aboutCenter), 1)) : 0;
+  
+  // Circle Y position - moves down until about center, then stops
+  const maxCircleY = windowHeight * 0.5; // Stop at center of about (150vh screen position = 50vh movement)
+  const circleY = Math.min(scrollY * 0.5, maxCircleY);
+  
+  // Circle scale calculation
+  let circleScale = 1;
+  if (phase1Progress < 1) {
+    // Phase 1: Slight collapse from 1 to 0.8
+    circleScale = 1 - (phase1Progress * 0.2);
+  } else if (phase2Progress < 1) {
+    // Phase 2: Bloom from 0.8 to 1.2
+    circleScale = 0.8 + (phase2Progress * 0.4);
+  } else {
+    // Phase 3: Collapse from 1.2 to 0.3
+    circleScale = 1.2 - (phase3Progress * 0.9);
+  }
+  
+  // Orange bloom effect (starts fading in during phase 1, peaks in phase 2)
+  const orangeOpacity = phase1Progress > 0.3 
+    ? Math.min((phase1Progress - 0.3) * 1.4 + phase2Progress * 0.5, 1) * (1 - phase3Progress * 0.5) 
+    : 0;
   return (
     <div className="relative w-full min-h-screen bg-[#d0d0d0]">
       {/* NOISE TEXTURE OVERLAY - SLOW SUBTLE ANIMATION */}
@@ -49,6 +116,43 @@ export default function Home() {
         </svg>
       </div>
 
+      {/* Fixed bouncing scroll chevron - navigates between sections */}
+      <a 
+        href="#"
+        className="fixed bottom-8 left-1/2 z-[60] cursor-pointer bounce-slow"
+        aria-label={scrollY > windowHeight * 1.8 ? "Scroll to top" : "Scroll to next section"}
+        onClick={(e) => {
+          e.preventDefault();
+          if (scrollY > windowHeight * 1.8) {
+            // At bottom (Features section) - go to top
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          } else if (scrollY > windowHeight * 0.8) {
+            // In About section - go to Features
+            document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
+          } else {
+            // In Hero - go to About
+            document.getElementById("about")?.scrollIntoView({ behavior: "smooth" });
+          }
+        }}
+      >
+        <svg 
+          width="36" 
+          height="36" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="#e07850" 
+          strokeWidth="2.5" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+          style={{
+            transform: scrollY > windowHeight * 1.8 ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.3s ease-out",
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </a>
+
       {/* FULL PAGE CONTAINER - allows circle to flow across sections */}
       <div className="relative min-h-[300vh]">
         
@@ -79,6 +183,24 @@ export default function Home() {
             }}
           />
 
+          {/* Large asymmetrical translucent logo - fade out on scroll */}
+          <div 
+            className="absolute top-[60%] -translate-y-1/2 left-[1vw] z-10 pointer-events-none"
+            style={{
+              opacity: 0.1 * (1 - phase1Progress),
+            }}
+          >
+            <img
+              src="/learnspacelogo.svg"
+              alt=""
+              className="w-[70vw] h-[70vw] md:w-[55vw] md:h-[55vw]"
+              style={{
+                transform: "rotate(12deg)",
+                filter: "sepia(100%) saturate(300%) hue-rotate(-10deg) brightness(0.9)",
+              }}
+            />
+          </div>
+
 
           {/* ===== TRADITIONAL TOP NAVBAR ===== */}
           <nav className="absolute top-[41px] left-0 right-0 z-30 flex items-center justify-center px-8 md:px-12 font-[family-name:var(--font-body)] fade-in delay-300">
@@ -108,21 +230,6 @@ export default function Home() {
             </div>
           </nav>
 
-          {/* Large asymmetrical translucent logo - positioned off to the left */}
-          <div 
-            className="absolute top-[60%] -translate-y-1/2 left-[1vw] z-10 pointer-events-none fade-in-scale delay-200"
-          >
-            <img
-              src="/learnspacelogo.svg"
-              alt=""
-              className="w-[70vw] h-[70vw] md:w-[55vw] md:h-[55vw]"
-              style={{
-                opacity: 0.1,
-                transform: "rotate(12deg)",
-                filter: "sepia(100%) saturate(300%) hue-rotate(-10deg) brightness(0.9)"
-              }}
-            />
-          </div>
 
           {/* Hero Content Container */}
           <div className="absolute bottom-[12vh] left-0 right-0 z-30 flex flex-col items-center justify-center gap-6">
@@ -135,30 +242,32 @@ export default function Home() {
             
             {/* Subtitle */}
             <p className="text-center text-neutral-900/70 text-base md:text-lg font-[family-name:var(--font-body)] tracking-[0.25em] uppercase whitespace-nowrap -translate-y-[25px] fade-in-up delay-300">
-              Connect the dots of your curiosity
+              Turn casual browsing into structured personal enrichment
             </p>
             
-            {/* CTA Buttons */}
-            <div className="flex gap-4 mt-4 -translate-y-[15px] fade-in-up delay-500">
+            {/* CTA Button */}
+            <div className="mt-4 -translate-y-[15px] fade-in-up delay-500">
               <a 
-                href="#"
-                className="px-8 py-3 text-white text-sm tracking-[0.15em] uppercase hover:brightness-110 transition-all duration-300"
+                href="/onboarding"
+                className="px-10 py-4 text-white text-base md:text-lg tracking-[0.15em] uppercase hover:brightness-110 transition-all duration-300"
                 style={{ backgroundColor: "#e07850" }}
               >
-                Sign Up
-              </a>
-              <a 
-                href="#"
-                className="px-8 py-3 bg-neutral-800 text-neutral-100 text-sm tracking-[0.15em] uppercase hover:bg-neutral-700 transition-all duration-300"
-              >
-                Log In
+                Get Started
               </a>
             </div>
           </div>
+
         </section>
 
-        {/* ===== THE SINGLE CIRCLE - positioned between sections ===== */}
-        <div className="absolute top-[100vh] left-1/2 -translate-x-1/2 -translate-y-1/2 z-0 fade-in-scale delay-100">
+        {/* ===== THE SINGLE CIRCLE - positioned between sections with scroll animation ===== */}
+        <div 
+          className="fixed left-1/2 z-0 fade-in-scale delay-100 pointer-events-none"
+          style={{
+            top: `calc(100vh - ${circleY}px)`,
+            transform: `translate(-50%, -50%) scale(${circleScale})`,
+            transition: "top 0.05s linear, transform 0.05s linear",
+          }}
+        >
           
           {/* Outermost dark ring - gets darker at edges */}
           <div 
@@ -209,6 +318,17 @@ export default function Home() {
               background: "radial-gradient(circle, rgba(255,248,245,0.95) 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0.8) 100%)"
             }}
           />
+
+          {/* Orange bloom layer - appears on scroll */}
+          <div 
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[100vh] w-[100vh] rounded-full"
+            style={{
+              background: "radial-gradient(circle, rgba(224,120,80,0.6) 0%, rgba(224,120,80,0.3) 30%, rgba(224,120,80,0.1) 50%, transparent 70%)",
+              opacity: orangeOpacity,
+              filter: "blur(40px)",
+              transition: "opacity 0.2s ease-out",
+            }}
+          />
         </div>
 
         {/* SECTION 2: ABOUT */}
@@ -217,12 +337,11 @@ export default function Home() {
           <div className="h-full w-full absolute" aria-hidden="true" />
           
           {/* About Content */}
-          <div className="relative z-30 max-w-3xl mx-auto px-8 text-center">
+          <div className="relative z-30 max-w-4xl mx-auto px-8 text-center">
             <div className="flex flex-col items-center mb-8">
-              <h2 className="text-4xl md:text-6xl font-semibold text-neutral-900/80 font-[family-name:var(--font-display)] text-center">
-                Built for the future of learning
+              <h2 className="text-3xl md:text-5xl lg:text-6xl font-semibold text-neutral-900/80 font-[family-name:var(--font-display)] text-center whitespace-nowrap">
+                Built for the future of <span className="relative inline-block pb-2">learning<span className="absolute bottom-0 left-0 w-full h-[3px]" style={{ backgroundColor: "#e07850" }} /></span>
               </h2>
-              <span className="mt-3 w-12 h-[3px]" style={{ backgroundColor: "#e07850" }} />
             </div>
             <p className="text-lg md:text-xl text-neutral-900/60 font-[family-name:var(--font-body)] leading-relaxed mb-12">
               Learnspace combines cutting-edge technology with thoughtful design to create 
