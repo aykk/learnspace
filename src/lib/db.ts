@@ -1,115 +1,131 @@
-import initSqlJs, { Database } from 'sql.js';
-import fs from 'fs';
-import path from 'path';
+/**
+ * Database layer for Learnspace - Snowflake backend
+ */
 
-const DB_PATH = path.join(process.cwd(), 'learnspace.db');
-const WASM_PATH = path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
-
-let db: Database | null = null;
+import { query, execute } from './snowflake';
 
 export interface Bookmark {
   ID: number;
   URL: string;
   TITLE: string | null;
   DATE_ADDED: string | null;
-  _LOAD_TIME: string;
+  LOAD_TIME: string;
 }
 
-async function getDb(): Promise<Database> {
-  if (db) return db;
-
-  // Load WASM binary directly for server-side usage
-  const wasmBuffer = fs.readFileSync(WASM_PATH);
-  const SQL = await initSqlJs({ wasmBinary: wasmBuffer as unknown as ArrayBuffer });
-  
-  // Try to load existing database
-  if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
-  }
-
-  // Create the bookmarks table if it doesn't exist
-  db.run(`
-    CREATE TABLE IF NOT EXISTS LEARNSPACE_BOOKMARKS (
-      ID INTEGER PRIMARY KEY AUTOINCREMENT,
-      URL VARCHAR(2048) NOT NULL,
-      TITLE VARCHAR(1024),
-      DATE_ADDED TEXT,
-      _LOAD_TIME TEXT DEFAULT (datetime('now'))
-    )
-  `);
-  
-  saveDb();
-  return db;
-}
-
-function saveDb() {
-  if (db) {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(DB_PATH, buffer);
-  }
-}
+// --- Bookmarks ---
 
 export async function getAllBookmarks(): Promise<Bookmark[]> {
-  const database = await getDb();
-  const results = database.exec('SELECT * FROM LEARNSPACE_BOOKMARKS ORDER BY _LOAD_TIME DESC');
-  
-  if (results.length === 0) return [];
-  
-  const columns = results[0].columns;
-  return results[0].values.map((row) => {
-    const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => {
-      obj[col] = row[i];
-    });
-    return obj as unknown as Bookmark;
-  });
+  const rows = await query<Bookmark>(
+    'SELECT ID, URL, TITLE, DATE_ADDED, LOAD_TIME FROM LEARNSPACE_BOOKMARKS ORDER BY LOAD_TIME DESC'
+  );
+  return rows;
 }
 
 export async function getBookmarksForPodcast(): Promise<{ URL: string; TITLE: string | null }[]> {
-  const database = await getDb();
-  const results = database.exec('SELECT URL, TITLE FROM LEARNSPACE_BOOKMARKS ORDER BY _LOAD_TIME DESC LIMIT 15');
-  
-  if (results.length === 0) return [];
-  
-  const columns = results[0].columns;
-  return results[0].values.map((row) => {
-    const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => {
-      obj[col] = row[i];
-    });
-    return obj as { URL: string; TITLE: string | null };
-  });
+  const rows = await query<{ URL: string; TITLE: string | null }>(
+    'SELECT URL, TITLE FROM LEARNSPACE_BOOKMARKS ORDER BY LOAD_TIME DESC LIMIT 15'
+  );
+  return rows;
 }
 
 export async function insertBookmark(url: string, title: string, dateAdded: string | null): Promise<number> {
-  const database = await getDb();
-  database.run(
+  // Insert the bookmark
+  await execute(
     'INSERT INTO LEARNSPACE_BOOKMARKS (URL, TITLE, DATE_ADDED) VALUES (?, ?, ?)',
     [url, title, dateAdded]
   );
-  saveDb();
   
-  // Get the last inserted ID
-  const result = database.exec('SELECT last_insert_rowid() as id');
-  return result[0]?.values[0]?.[0] as number || 0;
+  // Get the last inserted ID (Snowflake doesn't have last_insert_id, so we query by URL)
+  const rows = await query<{ ID: number }>(
+    'SELECT ID FROM LEARNSPACE_BOOKMARKS WHERE URL = ? ORDER BY LOAD_TIME DESC LIMIT 1',
+    [url]
+  );
+  
+  return rows[0]?.ID || 0;
 }
 
 export async function deleteBookmark(url: string): Promise<number> {
-  const database = await getDb();
-  database.run('DELETE FROM LEARNSPACE_BOOKMARKS WHERE URL = ?', [url]);
-  const changes = database.getRowsModified();
-  saveDb();
-  return changes;
+  const affected = await execute(
+    'DELETE FROM LEARNSPACE_BOOKMARKS WHERE URL = ?',
+    [url]
+  );
+  return affected;
 }
 
 export async function clearAllBookmarks(): Promise<number> {
-  const database = await getDb();
-  const before = database.exec('SELECT COUNT(*) as count FROM LEARNSPACE_BOOKMARKS')[0]?.values[0]?.[0] as number ?? 0;
-  database.run('DELETE FROM LEARNSPACE_BOOKMARKS');
-  saveDb();
+  // Get count before deletion
+  const countRows = await query<{ COUNT: number }>('SELECT COUNT(*) as COUNT FROM LEARNSPACE_BOOKMARKS');
+  const before = countRows[0]?.COUNT || 0;
+  
+  await execute('DELETE FROM LEARNSPACE_BOOKMARKS');
   return before;
+}
+
+// --- Intermediate Representations ---
+
+export interface IRRecord {
+  ID: string;
+  VERSION: number;
+  BOOKMARK_ID: number;
+  SOURCE_URL: string;
+  SOURCE_TITLE: string | null;
+  CREATED_AT: string;
+  SUMMARY: string;
+  KEY_TOPICS: string | string[]; // VARIANT in Snowflake returns as object
+  CONCEPTS: string | any[]; // VARIANT in Snowflake returns as object
+  DIFFICULTY: string;
+  CONTENT_TYPE: string;
+  ESTIMATED_READ_TIME: number | null;
+  RAW_TEXT: string | null;
+}
+
+export async function insertIR(ir: {
+  id: string;
+  version: number;
+  bookmarkId: number;
+  sourceUrl: string;
+  sourceTitle: string | null;
+  summary: string;
+  keyTopics: string[];
+  concepts: any[];
+  difficulty: string;
+  contentType: string;
+  estimatedReadTime?: number;
+  rawText?: string;
+}): Promise<void> {
+  await execute(
+    `INSERT INTO INTERMEDIATE_REPRESENTATIONS 
+     (ID, VERSION, BOOKMARK_ID, SOURCE_URL, SOURCE_TITLE, SUMMARY, KEY_TOPICS, CONCEPTS, 
+      DIFFICULTY, CONTENT_TYPE, ESTIMATED_READ_TIME, RAW_TEXT)
+     VALUES (?, ?, ?, ?, ?, ?, PARSE_JSON(?), PARSE_JSON(?), ?, ?, ?, ?)`,
+    [
+      ir.id,
+      ir.version,
+      ir.bookmarkId,
+      ir.sourceUrl,
+      ir.sourceTitle,
+      ir.summary,
+      JSON.stringify(ir.keyTopics),
+      JSON.stringify(ir.concepts),
+      ir.difficulty,
+      ir.contentType,
+      ir.estimatedReadTime ?? null,
+      ir.rawText ?? null,
+    ]
+  );
+}
+
+export async function getIRByBookmarkId(bookmarkId: number): Promise<IRRecord | null> {
+  const rows = await query<IRRecord>(
+    'SELECT * FROM INTERMEDIATE_REPRESENTATIONS WHERE BOOKMARK_ID = ? LIMIT 1',
+    [bookmarkId]
+  );
+  return rows[0] || null;
+}
+
+export async function getAllIRs(): Promise<IRRecord[]> {
+  const rows = await query<IRRecord>(
+    'SELECT * FROM INTERMEDIATE_REPRESENTATIONS ORDER BY CREATED_AT DESC'
+  );
+  return rows;
 }

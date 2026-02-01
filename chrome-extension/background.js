@@ -1,5 +1,5 @@
 // Configure your endpoint here — Next.js app (npm run dev)
-const WEBAPP_URL = 'http://localhost:3000/bookmarks';
+const WEBAPP_URL = 'http://localhost:3000/api/bookmarks';
 
 const LEARNSPACE_FOLDER_NAME = 'learnspace';
 
@@ -74,12 +74,17 @@ async function removeFromWebapp(url) {
   }
 }
 
-// Handle new bookmark created
+// Handle new bookmark created (works for both popup add and drag-drop)
 async function onBookmarkCreated(id, bookmark) {
-  const learnspaceId = await getLearnspaceFolderId();
-  if (!learnspaceId || bookmark.parentId !== learnspaceId) return;
+  // Fetch full bookmark - the passed object can be incomplete when created via drag-drop
+  const nodes = await chrome.bookmarks.get(id);
+  const node = nodes[0];
+  if (!node || !node.url) return; // Skip folders
 
-  await sendToWebapp(bookmark);
+  const learnspaceId = await getLearnspaceFolderId();
+  if (!learnspaceId || node.parentId !== learnspaceId) return;
+
+  await sendToWebapp(node);
 }
 
 // Handle bookmark moved (drag into or out of learnspace)
