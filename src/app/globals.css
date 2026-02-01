@@ -19,8 +19,23 @@
   }
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+/* Orange text selection */
+::selection {
+  background-color: rgba(224, 120, 80, 0.3);
+  color: inherit;
+}
+
+::-moz-selection {
+  background-color: rgba(224, 120, 80, 0.3);
+  color: inherit;
+}
+
 body {
-  background: var(--background);
+  background: #d0d0d0 !important;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   overflow-x: hidden;
@@ -30,44 +45,44 @@ body {
 @keyframes breathe {
   0%, 100% {
     opacity: 1;
-    filter: blur(60px);
+    filter: blur(50px);
   }
   50% {
-    opacity: 0.85;
-    filter: blur(65px);
+    opacity: 0.5;
+    filter: blur(90px);
   }
 }
 
 @keyframes breathe-slow {
   0%, 100% {
     opacity: 1;
-    filter: blur(50px);
+    filter: blur(40px);
   }
   50% {
-    opacity: 0.9;
-    filter: blur(55px);
+    opacity: 0.55;
+    filter: blur(80px);
   }
 }
 
 @keyframes breathe-mid {
   0%, 100% {
     opacity: 1;
-    filter: blur(40px);
+    filter: blur(35px);
   }
   50% {
-    opacity: 0.92;
-    filter: blur(45px);
+    opacity: 0.6;
+    filter: blur(70px);
   }
 }
 
 @keyframes breathe-glow {
   0%, 100% {
-    opacity: 0.4;
-    filter: blur(100px);
+    opacity: 0.6;
+    filter: blur(80px);
   }
   50% {
-    opacity: 0.5;
-    filter: blur(110px);
+    opacity: 1;
+    filter: blur(150px);
   }
 }
 
@@ -76,26 +91,82 @@ body {
     opacity: 1;
   }
   50% {
-    opacity: 0.88;
+    opacity: 0.5;
   }
 }
 
 .breathe {
-  animation: breathe 10s ease-in-out infinite;
+  animation: breathe 6s ease-in-out infinite;
 }
 
 .breathe-slow {
-  animation: breathe-slow 12s ease-in-out infinite;
+  animation: breathe-slow 8s ease-in-out infinite;
 }
 
 .breathe-mid {
-  animation: breathe-mid 8s ease-in-out infinite;
+  animation: breathe-mid 5s ease-in-out infinite;
 }
 
 .breathe-glow {
-  animation: breathe-glow 7s ease-in-out infinite;
+  animation: breathe-glow 4s ease-in-out infinite;
 }
 
 .breathe-ring {
-  animation: breathe-ring 9s ease-in-out infinite;
+  animation: breathe-ring 5s ease-in-out infinite;
 }
+
+/* Page load fade-in animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 1s ease-out forwards;
+  opacity: 0;
+}
+
+.fade-in {
+  animation: fadeIn 1.2s ease-out forwards;
+  opacity: 0;
+}
+
+.fade-in-scale {
+  animation: fadeInScale 1.5s ease-out forwards;
+  opacity: 0;
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+.delay-700 { animation-delay: 0.7s; }
+

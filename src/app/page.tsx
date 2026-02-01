@@ -50,7 +50,7 @@ export default function Home() {
       </div>
 
       {/* FULL PAGE CONTAINER - allows circle to flow across sections */}
-      <div className="relative min-h-[200vh]">
+      <div className="relative min-h-[300vh]">
         
         {/* SECTION 1: HERO */}
         <section className="relative flex h-[100vh] w-full items-end justify-center">
@@ -67,80 +67,104 @@ export default function Home() {
           <div 
             className="absolute top-0 left-0 h-[60vh] w-[45vw] z-20"
             style={{
-              background: "radial-gradient(ellipse at top left, rgba(60,60,60,0.6) 0%, rgba(90,90,90,0.4) 25%, rgba(120,120,120,0.2) 50%, transparent 75%)",
+              background: "radial-gradient(ellipse at top left, rgba(30,30,30,0.7) 0%, rgba(50,50,50,0.5) 25%, rgba(80,80,80,0.3) 50%, transparent 75%)",
               filter: "blur(60px)",
             }}
           />
           <div 
             className="absolute top-0 right-0 h-[60vh] w-[45vw] z-20"
             style={{
-              background: "radial-gradient(ellipse at top right, rgba(60,60,60,0.6) 0%, rgba(90,90,90,0.4) 25%, rgba(120,120,120,0.2) 50%, transparent 75%)",
+              background: "radial-gradient(ellipse at top right, rgba(30,30,30,0.7) 0%, rgba(50,50,50,0.5) 25%, rgba(80,80,80,0.3) 50%, transparent 75%)",
               filter: "blur(60px)",
             }}
           />
 
+
           {/* ===== TRADITIONAL TOP NAVBAR ===== */}
-          <nav className="absolute top-[82px] left-0 right-0 z-30 flex items-center justify-between px-8 md:px-12 font-[family-name:var(--font-body)]">
-            {/* Logo in top left */}
-            <img
-              src="/learnspacelogo.svg"
-              alt="Learnspace Logo"
-              className="w-10 h-10 md:w-12 md:h-12"
-              style={{ 
-                opacity: 0.8
-              }}
-            />
-            
+          <nav className="absolute top-[41px] left-0 right-0 z-30 flex items-center justify-center px-8 md:px-12 font-[family-name:var(--font-body)] fade-in delay-300">
             {/* Centered nav links */}
-            <div className="absolute left-1/2 -translate-x-1/2 flex justify-center gap-20 md:gap-32">
+            <div className="flex justify-center gap-12 md:gap-16">
               <a 
                 href="#"
-                className="text-neutral-900/80 text-lg md:text-xl font-normal tracking-wide lowercase hover:text-neutral-900 transition-all duration-300"
+                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300 group"
               >
                 home
+                <span className="absolute -bottom-1 left-0 w-0 h-[2px] group-hover:w-full transition-all duration-300" style={{ backgroundColor: "#e07850" }} />
               </a>
               <a 
                 href="#about"
-                className="text-neutral-900/80 text-lg md:text-xl font-normal tracking-wide lowercase hover:text-neutral-900 transition-all duration-300"
+                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300 group"
               >
                 about
+                <span className="absolute -bottom-1 left-0 w-0 h-[2px] group-hover:w-full transition-all duration-300" style={{ backgroundColor: "#e07850" }} />
               </a>
               <a 
-                href="#"
-                className="text-neutral-900/80 text-lg md:text-xl font-normal tracking-wide lowercase hover:text-neutral-900 transition-all duration-300"
+                href="#features"
+                className="relative text-neutral-900/70 text-sm md:text-base font-normal tracking-[0.2em] uppercase hover:text-neutral-900 transition-all duration-300 group"
               >
-                sign up
-              </a>
-              <a 
-                href="#"
-                className="text-neutral-900/80 text-lg md:text-xl font-normal tracking-wide lowercase hover:text-neutral-900 transition-all duration-300"
-              >
-                log in
+                features
+                <span className="absolute -bottom-1 left-0 w-0 h-[2px] group-hover:w-full transition-all duration-300" style={{ backgroundColor: "#e07850" }} />
               </a>
             </div>
-            
-            {/* Spacer for symmetry */}
-            <div className="w-10 h-10 md:w-12 md:h-12" />
           </nav>
-          
-          {/* Hero Title */}
-          <div className="absolute bottom-[2vh] left-0 right-0 z-30 flex items-center justify-center">
+
+          {/* Large asymmetrical translucent logo - positioned off to the left */}
+          <div 
+            className="absolute top-[60%] -translate-y-1/2 left-[1vw] z-10 pointer-events-none fade-in-scale delay-200"
+          >
+            <img
+              src="/learnspacelogo.svg"
+              alt=""
+              className="w-[70vw] h-[70vw] md:w-[55vw] md:h-[55vw]"
+              style={{
+                opacity: 0.1,
+                transform: "rotate(12deg)",
+                filter: "sepia(100%) saturate(300%) hue-rotate(-10deg) brightness(0.9)"
+              }}
+            />
+          </div>
+
+          {/* Hero Content Container */}
+          <div className="absolute bottom-[12vh] left-0 right-0 z-30 flex flex-col items-center justify-center gap-6">
+            {/* Hero Title */}
             <h1 
-              className="text-[12vw] md:text-[10vw] text-neutral-900/80 tracking-tight text-center font-semibold font-[family-name:var(--font-display)]"
+              className="text-[14vw] md:text-[12vw] text-neutral-900/85 tracking-tighter text-center font-semibold font-[family-name:var(--font-display)] leading-[0.85] -translate-y-[50px] fade-in-up delay-100"
             >
-              Learnspace.
+              Learnspace<span style={{ color: "#e07850" }}>.</span>
             </h1>
+            
+            {/* Subtitle */}
+            <p className="text-center text-neutral-900/70 text-base md:text-lg font-[family-name:var(--font-body)] tracking-[0.25em] uppercase whitespace-nowrap -translate-y-[25px] fade-in-up delay-300">
+              Connect the dots of your curiosity
+            </p>
+            
+            {/* CTA Buttons */}
+            <div className="flex gap-4 mt-4 -translate-y-[15px] fade-in-up delay-500">
+              <a 
+                href="#"
+                className="px-8 py-3 text-white text-sm tracking-[0.15em] uppercase hover:brightness-110 transition-all duration-300"
+                style={{ backgroundColor: "#e07850" }}
+              >
+                Sign Up
+              </a>
+              <a 
+                href="#"
+                className="px-8 py-3 bg-neutral-800 text-neutral-100 text-sm tracking-[0.15em] uppercase hover:bg-neutral-700 transition-all duration-300"
+              >
+                Log In
+              </a>
+            </div>
           </div>
         </section>
 
         {/* ===== THE SINGLE CIRCLE - positioned between sections ===== */}
-        <div className="absolute top-[100vh] left-1/2 -translate-x-1/2 -translate-y-1/2 z-0">
+        <div className="absolute top-[100vh] left-1/2 -translate-x-1/2 -translate-y-1/2 z-0 fade-in-scale delay-100">
           
           {/* Outermost dark ring - gets darker at edges */}
           <div 
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[210vh] w-[210vh] rounded-full md:h-[240vh] md:w-[240vh] breathe"
             style={{
-              background: "radial-gradient(circle, transparent 0%, transparent 35%, rgba(120,120,120,0.3) 50%, rgba(80,80,80,0.5) 65%, rgba(50,50,50,0.6) 80%, rgba(30,30,30,0.4) 100%)",
+              background: "radial-gradient(circle, transparent 0%, transparent 30%, rgba(90,90,90,0.4) 45%, rgba(50,50,50,0.6) 60%, rgba(30,30,30,0.7) 75%, rgba(20,20,20,0.5) 100%)",
             }}
           />
 
@@ -148,7 +172,7 @@ export default function Home() {
           <div 
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[180vh] w-[180vh] rounded-full md:h-[210vh] md:w-[210vh] breathe-slow"
             style={{
-              background: "radial-gradient(circle, rgba(255,255,255,0.5) 0%, rgba(220,220,220,0.4) 25%, rgba(160,160,160,0.4) 45%, rgba(100,100,100,0.5) 60%, rgba(60,60,60,0.4) 80%, transparent 100%)",
+              background: "radial-gradient(circle, rgba(255,255,255,0.7) 0%, rgba(250,250,250,0.5) 20%, rgba(200,200,200,0.4) 40%, rgba(80,80,80,0.5) 60%, rgba(40,40,40,0.5) 80%, transparent 100%)",
             }}
           />
 
@@ -156,44 +180,200 @@ export default function Home() {
           <div 
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[150vh] w-[150vh] rounded-full md:h-[180vh] md:w-[180vh] breathe-mid"
             style={{
-              background: "radial-gradient(circle, rgba(255,255,255,0.7) 0%, rgba(240,240,240,0.5) 30%, rgba(180,180,180,0.4) 55%, rgba(120,120,120,0.3) 75%, transparent 90%)",
+              background: "radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 25%, rgba(220,220,220,0.5) 45%, rgba(100,100,100,0.4) 70%, transparent 90%)",
             }}
           />
 
           {/* The Main Glow Ring Shape */}
           <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[120vh] w-[120vh] rounded-full border-[4px] border-white/60 bg-transparent md:h-[150vh] md:w-[150vh] breathe-ring"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[120vh] w-[120vh] rounded-full border-[4px] border-white/80 bg-transparent md:h-[150vh] md:w-[150vh] breathe-ring"
             style={{
               boxShadow:
-                "0 0 120px 50px rgba(255, 255, 255, 0.7), 0 0 250px 100px rgba(255, 255, 255, 0.4), 0 0 400px 150px rgba(200, 200, 200, 0.2), inset 0 0 100px 40px rgba(255, 255, 255, 0.6), inset 0 0 200px 80px rgba(255, 255, 255, 0.3)",
+                "0 0 120px 50px rgba(255, 255, 255, 0.9), 0 0 250px 100px rgba(255, 255, 255, 0.5), 0 0 400px 150px rgba(220, 220, 220, 0.3), inset 0 0 100px 40px rgba(255, 255, 255, 0.8), inset 0 0 200px 80px rgba(255, 255, 255, 0.4)",
             }}
           />
 
           {/* Secondary ring for depth */}
           <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[135vh] w-[135vh] rounded-full border-[2px] border-white/30 md:h-[165vh] md:w-[165vh] breathe-ring"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[135vh] w-[135vh] rounded-full border-[2px] border-white/50 md:h-[165vh] md:w-[165vh] breathe-ring"
             style={{
-              boxShadow: "0 0 80px 35px rgba(255, 255, 255, 0.35), 0 0 150px 60px rgba(200, 200, 200, 0.2), inset 0 0 60px 25px rgba(255, 255, 255, 0.25)",
+              boxShadow: "0 0 80px 35px rgba(255, 255, 255, 0.5), 0 0 150px 60px rgba(240, 240, 240, 0.3), inset 0 0 60px 25px rgba(255, 255, 255, 0.4)",
               filter: "blur(6px)",
             }}
           />
           
-          {/* Inner bright core glow */}
+          {/* Inner bright core glow - subtle warm tint */}
           <div 
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[75vh] w-[75vh] rounded-full bg-white breathe-glow"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[75vh] w-[75vh] rounded-full breathe-glow"
+            style={{
+              background: "radial-gradient(circle, rgba(255,248,245,0.95) 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0.8) 100%)"
+            }}
           />
         </div>
 
         {/* SECTION 2: ABOUT */}
-        <section id="about" className="relative h-[100vh] w-full">
+        <section id="about" className="relative h-[100vh] w-full flex items-center justify-center">
           {/* Invisible spacer to ensure section has content in document flow */}
-          <div className="h-full w-full" aria-hidden="true" />
+          <div className="h-full w-full absolute" aria-hidden="true" />
           
-          {/* Bottom fade gradient - blends dome into background */}
+          {/* About Content */}
+          <div className="relative z-30 max-w-3xl mx-auto px-8 text-center">
+            <div className="flex flex-col items-center mb-8">
+              <h2 className="text-4xl md:text-6xl font-semibold text-neutral-900/80 font-[family-name:var(--font-display)] text-center">
+                Built for the future of learning
+              </h2>
+              <span className="mt-3 w-12 h-[3px]" style={{ backgroundColor: "#e07850" }} />
+            </div>
+            <p className="text-lg md:text-xl text-neutral-900/60 font-[family-name:var(--font-body)] leading-relaxed mb-12">
+              Learnspace combines cutting-edge technology with thoughtful design to create 
+              immersive educational experiences. Join thousands of learners and educators 
+              who are reimagining what&apos;s possible.
+            </p>
+            
+            {/* Feature grid */}
+            <div className="grid grid-cols-3 gap-8 mt-12">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-neutral-900/10 flex items-center justify-center">
+                  <span className="text-2xl">✦</span>
+                </div>
+                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">Interactive</span>
+              </div>
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-neutral-900/10 flex items-center justify-center">
+                  <span className="text-2xl">◈</span>
+                </div>
+                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">Collaborative</span>
+              </div>
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-neutral-900/10 flex items-center justify-center">
+                  <span className="text-2xl">❋</span>
+                </div>
+                <span className="text-sm tracking-[0.2em] uppercase text-neutral-900/60">Innovative</span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Transition gradient to features */}
           <div 
-            className="absolute bottom-0 left-0 w-full h-[50vh] z-10"
+            className="absolute bottom-0 left-0 w-full h-[30vh] z-10"
             style={{
-              background: "linear-gradient(to top, #d0d0d0 0%, #d0d0d0 20%, transparent 100%)",
+              background: "linear-gradient(to top, #d0d0d0 0%, transparent 100%)",
+            }}
+          />
+        </section>
+
+        {/* SECTION 3: FEATURES */}
+        <section id="features" className="relative min-h-[100vh] w-full flex items-center justify-center py-24">
+          {/* Background continuity */}
+          <div className="absolute inset-0 bg-[#d0d0d0]" />
+          
+          {/* Subtle top gradient for seamless blend */}
+          <div 
+            className="absolute top-0 left-0 w-full h-[20vh] z-10"
+            style={{
+              background: "linear-gradient(to bottom, transparent 0%, #d0d0d0 100%)",
+            }}
+          />
+
+          {/* Features Content */}
+          <div className="relative z-30 max-w-5xl mx-auto px-8">
+            <div className="flex flex-col items-center mb-6">
+              <h2 className="text-4xl md:text-6xl font-semibold text-neutral-900/80 font-[family-name:var(--font-display)] text-center">
+                Features
+              </h2>
+              <span className="mt-3 w-12 h-[3px]" style={{ backgroundColor: "#e07850" }} />
+            </div>
+            <p className="text-lg md:text-xl text-neutral-900/60 font-[family-name:var(--font-body)] leading-relaxed mb-16 text-center max-w-2xl mx-auto">
+              Everything you need to transform your learning journey
+            </p>
+            
+            {/* Features Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Feature 1 */}
+              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+                  ◎
+                </div>
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                  Smart Organization
+                </h3>
+                <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
+                  Automatically categorize and connect your notes, ideas, and resources with intelligent tagging.
+                </p>
+              </div>
+
+              {/* Feature 2 */}
+              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+                  ⬡
+                </div>
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                  Visual Mapping
+                </h3>
+                <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
+                  See connections between concepts with beautiful, interactive knowledge graphs.
+                </p>
+              </div>
+
+              {/* Feature 3 */}
+              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+                  ◈
+                </div>
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                  Collaborative Spaces
+                </h3>
+                <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
+                  Share knowledge and build understanding together with real-time collaboration tools.
+                </p>
+              </div>
+
+              {/* Feature 4 */}
+              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+                  ✧
+                </div>
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                  AI-Powered Insights
+                </h3>
+                <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
+                  Get personalized suggestions and discover hidden patterns in your learning data.
+                </p>
+              </div>
+
+              {/* Feature 5 */}
+              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+                  ⊕
+                </div>
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                  Universal Import
+                </h3>
+                <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
+                  Bring in content from anywhere—PDFs, web clips, notes, and more—seamlessly.
+                </p>
+              </div>
+
+              {/* Feature 6 */}
+              <div className="group p-8 bg-white/40 backdrop-blur-sm hover:bg-white/60 border-l-0 hover:border-l-4 transition-all duration-300" style={{ borderColor: "#e07850" }}>
+                <div className="w-12 h-12 mb-6 flex items-center justify-center text-3xl" style={{ color: "#e07850" }}>
+                  ◇
+                </div>
+                <h3 className="text-xl font-semibold text-neutral-900/85 font-[family-name:var(--font-display)] mb-3">
+                  Focused Learning
+                </h3>
+                <p className="text-neutral-900/60 font-[family-name:var(--font-body)] text-sm leading-relaxed">
+                  Distraction-free modes and spaced repetition help you retain what matters most.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Bottom fade gradient */}
+          <div 
+            className="absolute bottom-0 left-0 w-full h-[30vh] z-10"
+            style={{
+              background: "linear-gradient(to top, #d0d0d0 0%, #d0d0d0 30%, transparent 100%)",
             }}
           />
           
@@ -201,14 +381,14 @@ export default function Home() {
           <div 
             className="absolute bottom-0 left-0 h-[60vh] w-[45vw] z-20"
             style={{
-              background: "radial-gradient(ellipse at bottom left, rgba(60,60,60,0.6) 0%, rgba(90,90,90,0.4) 25%, rgba(120,120,120,0.2) 50%, transparent 75%)",
+              background: "radial-gradient(ellipse at bottom left, rgba(30,30,30,0.7) 0%, rgba(50,50,50,0.5) 25%, rgba(80,80,80,0.3) 50%, transparent 75%)",
               filter: "blur(60px)",
             }}
           />
           <div 
             className="absolute bottom-0 right-0 h-[60vh] w-[45vw] z-20"
             style={{
-              background: "radial-gradient(ellipse at bottom right, rgba(60,60,60,0.6) 0%, rgba(90,90,90,0.4) 25%, rgba(120,120,120,0.2) 50%, transparent 75%)",
+              background: "radial-gradient(ellipse at bottom right, rgba(30,30,30,0.7) 0%, rgba(50,50,50,0.5) 25%, rgba(80,80,80,0.3) 50%, transparent 75%)",
               filter: "blur(60px)",
             }}
           />
