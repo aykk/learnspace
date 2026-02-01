@@ -27,6 +27,17 @@ interface IR {
   estimatedReadTime?: number;
 }
 
+interface Cluster {
+  id: string;
+  name: string;
+  description: string;
+  irIds: string[];
+  aggregatedTopics: string[];
+  memberCount: number;
+  avgDifficulty: string;
+  createdAt: string;
+}
+
 export default function Dashboard() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [irs, setIrs] = useState<Record<number, IR>>({});
@@ -44,6 +55,11 @@ export default function Dashboard() {
   
   // IR extraction state
   const [extractingIR, setExtractingIR] = useState<Record<number, boolean>>({});
+  
+  // Clustering state
+  const [clusters, setClusters] = useState<Cluster[]>([]);
+  const [generatingClusters, setGeneratingClusters] = useState(false);
+  const [clusterError, setClusterError] = useState('');
 
   const fetchBookmarks = async () => {
     setLoading(true);
@@ -75,8 +91,20 @@ export default function Dashboard() {
     }
   };
 
+  const fetchClusters = async () => {
+    try {
+      const res = await fetch('/api/clusters');
+      const data = await res.json();
+      setClusters(data.clusters || []);
+    } catch (error) {
+      console.error('Failed to fetch clusters:', error);
+      setClusters([]);
+    }
+  };
+
   useEffect(() => {
     fetchBookmarks();
+    fetchClusters();
   }, []);
 
   // Auto-poll for IRs when there are bookmarks without extracted IRs
@@ -153,6 +181,7 @@ export default function Dashboard() {
         body: JSON.stringify({ url }),
       });
       fetchBookmarks();
+      fetchClusters(); // Clusters are updated when bookmark/IR is removed
     } catch (error) {
       console.error('Failed to delete bookmark:', error);
     }
@@ -197,6 +226,30 @@ export default function Dashboard() {
       console.error('Failed to clear bookmarks:', error);
     } finally {
       setClearing(false);
+    }
+  };
+
+  const handleGenerateClusters = async () => {
+    setGeneratingClusters(true);
+    setClusterError('');
+    try {
+      const res = await fetch('/api/clusters/generate', {
+        method: 'POST',
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        await fetchClusters(); // Refresh clusters
+        alert(`✅ Generated ${data.clustersGenerated} clusters!`);
+      } else {
+        const err = await res.json();
+        setClusterError(err.error || 'Failed to generate clusters');
+      }
+    } catch (error) {
+      console.error('Failed to generate clusters:', error);
+      setClusterError('Network error generating clusters');
+    } finally {
+      setGeneratingClusters(false);
     }
   };
 
@@ -403,6 +456,62 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+
+        {/* Learning Clusters */}
+        <div className="bg-[#16162a] rounded-xl p-6 border border-white/10 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-[#29b5e8] mb-1">🧩 Learning Clusters</h2>
+              <p className="text-white/60 text-sm">
+                AI-generated groups of related content based on semantic similarity
+              </p>
+            </div>
+            <button
+              onClick={handleGenerateClusters}
+              disabled={generatingClusters || Object.keys(irs).length < 1}
+              className="bg-[#29b5e8] hover:bg-[#1e9fd4] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm"
+              title={Object.keys(irs).length < 1 ? 'Add at least one bookmark and extract its IR first' : ''}
+            >
+              {generatingClusters ? 'Generating...' : clusters.length > 0 ? 'Regenerate Clusters' : 'Generate Clusters'}
+            </button>
+          </div>
+
+          {clusterError && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm">
+              {clusterError}
+            </div>
+          )}
+
+          {clusters.length === 0 ? (
+            <div className="text-center py-8 text-white/50 italic">
+              No clusters yet. Generate clusters from your IRs to see related content grouped together.
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {clusters.map((cluster) => (
+                <div key={cluster.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-white">{cluster.name}</h3>
+                    <span className="text-xs bg-[#29b5e8]/20 text-[#29b5e8] px-2 py-1 rounded">
+                      {cluster.memberCount} {cluster.memberCount === 1 ? 'item' : 'items'}
+                    </span>
+                  </div>
+                  <p className="text-white/70 text-sm mb-3">{cluster.description}</p>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {cluster.aggregatedTopics.slice(0, 5).map((topic, idx) => (
+                      <span key={idx} className="text-xs bg-white/10 text-white/80 px-2 py-1 rounded">
+                        {topic}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="text-xs text-white/50">
+                    Difficulty: <span className="text-white/70">{cluster.avgDifficulty}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

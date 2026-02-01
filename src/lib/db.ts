@@ -45,10 +45,42 @@ export async function insertBookmark(url: string, title: string, dateAdded: stri
 }
 
 export async function deleteBookmark(url: string): Promise<number> {
+  // Get bookmark and its IR (if any) before deleting
+  const bookmarks = await query<{ ID: number }>(
+    'SELECT ID FROM LEARNSPACE_BOOKMARKS WHERE URL = ? LIMIT 1',
+    [url]
+  );
+  const bookmarkId = bookmarks[0]?.ID;
+  const existingIR = bookmarkId ? await getIRByBookmarkId(bookmarkId) : null;
+  const irIdToRemove = existingIR?.ID ?? null;
+
+  // Delete the bookmark
   const affected = await execute(
     'DELETE FROM LEARNSPACE_BOOKMARKS WHERE URL = ?',
     [url]
   );
+
+  // If bookmark was deleted, cascade: delete IR and update clusters
+  if (affected > 0 && bookmarkId) {
+    try {
+      await execute(
+        'DELETE FROM INTERMEDIATE_REPRESENTATIONS WHERE BOOKMARK_ID = ?',
+        [bookmarkId]
+      );
+      console.log(`❄️  [Learnspace DB] Deleted IR for bookmark ${bookmarkId}`);
+    } catch (error) {
+      console.error('Failed to delete IR:', error);
+    }
+    // Remove this IR from any clusters that contain it (or delete empty clusters)
+    if (irIdToRemove) {
+      try {
+        await removeIRFromClusters(irIdToRemove);
+      } catch (error) {
+        console.error('Failed to update clusters after IR delete:', error);
+      }
+    }
+  }
+
   return affected;
 }
 
@@ -57,7 +89,25 @@ export async function clearAllBookmarks(): Promise<number> {
   const countRows = await query<{ COUNT: number }>('SELECT COUNT(*) as COUNT FROM LEARNSPACE_BOOKMARKS');
   const before = countRows[0]?.COUNT || 0;
   
+  // Delete all bookmarks
   await execute('DELETE FROM LEARNSPACE_BOOKMARKS');
+  
+  // Also delete all IRs (cascade delete)
+  try {
+    await execute('DELETE FROM INTERMEDIATE_REPRESENTATIONS');
+    console.log('❄️  [Learnspace DB] Deleted all IRs');
+  } catch (error) {
+    console.error('Failed to delete all IRs:', error);
+  }
+  
+  // Also delete all clusters since they reference IRs
+  try {
+    await execute('DELETE FROM CLUSTERS');
+    console.log('❄️  [Learnspace DB] Deleted all clusters');
+  } catch (error) {
+    console.error('Failed to delete all clusters:', error);
+  }
+  
   return before;
 }
 
@@ -129,4 +179,120 @@ export async function getAllIRs(): Promise<IRRecord[]> {
     'SELECT * FROM INTERMEDIATE_REPRESENTATIONS ORDER BY CREATED_AT DESC'
   );
   return rows;
+}
+
+// --- Clusters ---
+
+export interface ClusterRecord {
+  ID: string;
+  NAME: string;
+  DESCRIPTION: string | null;
+  CREATED_AT: string;
+  UPDATED_AT: string;
+  IR_IDS: string | string[]; // VARIANT
+  AGGREGATED_TOPICS: string | string[]; // VARIANT
+  MEMBER_COUNT: number;
+  AVG_DIFFICULTY: string | null;
+}
+
+export async function insertCluster(cluster: {
+  id: string;
+  name: string;
+  description: string | null;
+  irIds: string[];
+  aggregatedTopics: string[];
+  memberCount: number;
+  avgDifficulty: string | null;
+}): Promise<void> {
+  await execute(
+    `INSERT INTO CLUSTERS 
+     (ID, NAME, DESCRIPTION, IR_IDS, AGGREGATED_TOPICS, MEMBER_COUNT, AVG_DIFFICULTY)
+     SELECT ?, ?, ?, PARSE_JSON(?), PARSE_JSON(?), ?, ?`,
+    [
+      cluster.id,
+      cluster.name,
+      cluster.description,
+      JSON.stringify(cluster.irIds),
+      JSON.stringify(cluster.aggregatedTopics),
+      cluster.memberCount,
+      cluster.avgDifficulty,
+    ]
+  );
+}
+
+export async function getAllClusters(): Promise<ClusterRecord[]> {
+  const rows = await query<ClusterRecord>(
+    'SELECT * FROM CLUSTERS ORDER BY CREATED_AT DESC'
+  );
+  return rows;
+}
+
+export async function getClusterById(id: string): Promise<ClusterRecord | null> {
+  const rows = await query<ClusterRecord>(
+    'SELECT * FROM CLUSTERS WHERE ID = ? LIMIT 1',
+    [id]
+  );
+  return rows[0] || null;
+}
+
+export async function deleteAllClusters(): Promise<number> {
+  const countRows = await query<{ COUNT: number }>('SELECT COUNT(*) as COUNT FROM CLUSTERS');
+  const before = countRows[0]?.COUNT || 0;
+  
+  await execute('DELETE FROM CLUSTERS');
+  return before;
+}
+
+/**
+ * Parse IR_IDS from a cluster record (VARIANT can return string or array)
+ */
+function parseClusterIrIds(irIds: unknown): string[] {
+  if (Array.isArray(irIds)) return irIds as string[];
+  if (typeof irIds === 'string') {
+    try {
+      const parsed = JSON.parse(irIds);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Update a cluster's IR_IDS and MEMBER_COUNT (e.g. after removing an IR)
+ */
+export async function updateClusterMembers(
+  clusterId: string,
+  irIds: string[],
+  memberCount: number
+): Promise<void> {
+  await execute(
+    'UPDATE CLUSTERS SET IR_IDS = PARSE_JSON(?), MEMBER_COUNT = ? WHERE ID = ?',
+    [JSON.stringify(irIds), memberCount, clusterId]
+  );
+}
+
+/**
+ * Remove a deleted IR from all clusters that contain it.
+ * Deletes clusters that end up with zero members.
+ */
+export async function removeIRFromClusters(irId: string): Promise<void> {
+  const clusters = await getAllClusters();
+  
+  for (const cluster of clusters) {
+    const irIds = parseClusterIrIds(cluster.IR_IDS);
+    if (!irIds.includes(irId)) continue;
+    
+    const newIrIds = irIds.filter((id) => id !== irId);
+    const newCount = newIrIds.length;
+    
+    if (newCount === 0) {
+      await execute('DELETE FROM CLUSTERS WHERE ID = ?', [cluster.ID]);
+      console.log(`❄️  [Learnspace DB] Deleted empty cluster ${cluster.ID}`);
+    } else {
+      await updateClusterMembers(cluster.ID, newIrIds, newCount);
+      console.log(`❄️  [Learnspace DB] Removed IR ${irId} from cluster ${cluster.ID} (${newCount} members left)`);
+    }
+  }
 }
