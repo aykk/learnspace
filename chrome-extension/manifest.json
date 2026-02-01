@@ -10,5 +10,12 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/dashboard*", "http://127.0.0.1/dashboard*"],
+      "js": ["dashboard-sync.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }
