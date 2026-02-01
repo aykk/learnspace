@@ -21,7 +21,7 @@ npm install
 ```
 
 ### 2. Environment Setup
-Your `.env` file should have:
+Create `.env.local` with your API keys (get keys from [Google AI Studio](https://aistudio.google.com/apikey) and [Wondercraft](https://www.wondercraft.ai/)):
 ```
 GEMINI_API_KEY=your_gemini_key_here
 WONDERCRAFT_API_KEY=your_wondercraft_key_here

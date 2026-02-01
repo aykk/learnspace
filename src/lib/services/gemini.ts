@@ -6,8 +6,7 @@ import { IntermediateRepresentation, Concept } from '../types/ir';
 import { v4 as uuidv4 } from 'uuid';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-// Use gemini-2.5-flash - the latest available model
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'] as const;
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -19,6 +18,47 @@ interface GeminiResponse {
   }>;
 }
 
+async function callGeminiWithFallback(
+  prompt: string,
+  options: { temperature?: number; maxOutputTokens?: number }
+): Promise<string> {
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: options.temperature ?? 0.3,
+      maxOutputTokens: options.maxOutputTokens ?? 4096,
+    },
+  };
+
+  let lastError = '';
+  for (const model of MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      const data: GeminiResponse = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text;
+    } else {
+      const errText = await response.text();
+      lastError = errText;
+      if (response.status === 429 || errText.includes('quota') || errText.includes('RESOURCE_EXHAUSTED')) {
+        const retryMatch = errText.match(/retry in (\d+(?:\.\d+)?)s/i);
+        const waitMs = retryMatch ? Math.ceil(parseFloat(retryMatch[1]) * 1000) : 25000;
+        console.warn(`[IR] Quota exceeded for ${model}, retrying in ${waitMs / 1000}s with next model...`);
+        await new Promise((r) => setTimeout(r, Math.min(waitMs, 30000)));
+        continue;
+      }
+      throw new Error(`Gemini API error (${response.status}): ${errText}`);
+    }
+  }
+  throw new Error(lastError || 'All Gemini models exhausted (quota). Try again in a few minutes.');
+}
+
 /**
  * Extract Intermediate Representation from a URL using Gemini
  */
@@ -27,51 +67,24 @@ export async function extractIRFromUrl(url: string, title: string | null): Promi
     throw new Error('GEMINI_API_KEY not set in environment variables');
   }
 
-  // For MVP: We'll pass the URL and let Gemini "imagine" the content
-  // In production, you'd fetch and parse the actual page content first
   const prompt = buildIRExtractionPrompt(url, title);
+  const text = await callGeminiWithFallback(prompt, { temperature: 0.3, maxOutputTokens: 4096 });
 
-  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: prompt
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.3, // Lower for more consistent extraction
-        maxOutputTokens: 4096, // Increased for longer responses
-      }
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
-  }
-
-  const data: GeminiResponse = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!text) {
-    throw new Error('No response from Gemini');
-  }
-
-  // Parse the JSON response from Gemini
   const parsed = parseGeminiIRResponse(text);
 
-  // Build the full IR object
   const ir: IntermediateRepresentation = {
     id: uuidv4(),
     version: 1,
     sourceUrl: url,
     sourceTitle: title,
     createdAt: new Date().toISOString(),
-    ...parsed,
+    summary: parsed.summary || 'No summary available',
+    keyTopics: parsed.keyTopics || [],
+    concepts: parsed.concepts || [],
+    difficulty: parsed.difficulty || 'intermediate',
+    contentType: parsed.contentType || 'other',
+    estimatedReadTime: parsed.estimatedReadTime,
+    rawText: parsed.rawText,
   };
 
   return ir;
@@ -152,16 +165,9 @@ export async function testGeminiConnection(): Promise<boolean> {
   if (!GEMINI_API_KEY) {
     return false;
   }
-
   try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: 'Hello' }] }],
-      }),
-    });
-    return response.ok;
+    await callGeminiWithFallback('Hello', { maxOutputTokens: 10 });
+    return true;
   } catch {
     return false;
   }

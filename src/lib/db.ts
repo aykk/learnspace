@@ -260,6 +260,24 @@ function parseClusterIrIds(irIds: unknown): string[] {
 }
 
 /**
+ * Delete any clusters that have 0 links (empty clusters).
+ * Call after incremental updates or when cleaning up.
+ */
+export async function deleteEmptyClusters(): Promise<number> {
+  const clusters = await getAllClusters();
+  let deleted = 0;
+  for (const c of clusters) {
+    const irIds = parseClusterIrIds(c.IR_IDS);
+    if (irIds.length === 0) {
+      await execute('DELETE FROM CLUSTERS WHERE ID = ?', [c.ID]);
+      deleted++;
+      console.log(`❄️  [Learnspace DB] Deleted empty cluster ${c.ID}`);
+    }
+  }
+  return deleted;
+}
+
+/**
  * Update a cluster's IR_IDS and MEMBER_COUNT (e.g. after removing an IR)
  */
 export async function updateClusterMembers(
@@ -271,6 +289,22 @@ export async function updateClusterMembers(
     'UPDATE CLUSTERS SET IR_IDS = PARSE_JSON(?), MEMBER_COUNT = ? WHERE ID = ?',
     [JSON.stringify(irIds), memberCount, clusterId]
   );
+}
+
+/**
+ * Add IRs to an existing cluster (merge; never remove).
+ * Used when refreshing: new links get assigned to existing clusters.
+ */
+export async function addIRsToCluster(
+  clusterId: string,
+  additionalIrIds: string[]
+): Promise<void> {
+  if (additionalIrIds.length === 0) return;
+  const cluster = await getClusterById(clusterId);
+  if (!cluster) return;
+  const current = parseClusterIrIds(cluster.IR_IDS);
+  const merged = [...new Set([...current, ...additionalIrIds])];
+  await updateClusterMembers(clusterId, merged, merged.length);
 }
 
 /**

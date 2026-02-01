@@ -45,9 +45,10 @@ export default function Onboarding() {
     if (step < totalSteps) {
       setStep(step + 1);
     } else {
-      // Final step - save to console and show setup instructions
+      // Final step - save to localStorage and show setup instructions
       console.log("=== ONBOARDING SURVEY RESULTS ===");
       console.log(JSON.stringify(data, null, 2));
+      localStorage.setItem('learnspace_preferences', JSON.stringify(data));
       setSurveyComplete(true);
     }
   };

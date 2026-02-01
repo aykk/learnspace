@@ -3,6 +3,41 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 
+// User preferences from onboarding
+interface UserContentPreferences {
+  learningStyle: 'verbal' | 'audio';
+  textFormat?: 'bullet' | 'paragraph' | 'mixed';
+  jargonLevel?: 'none' | 'some' | 'technical';
+  interests?: string[];
+  customInterests?: string;
+  podcastLength?: 'short' | 'medium' | 'long';
+  podcastStyle?: 'conversational' | 'educational' | 'storytelling';
+  background?: 'student' | 'professional' | 'hobbyist' | 'researcher' | 'other';
+  backgroundDetails?: string;
+  extraNotes?: string;
+}
+
+// Backend cluster structure
+interface BackendCluster {
+  ID: number;
+  NAME: string;
+  DESCRIPTION: string;
+  IR_IDS: string; // JSON array
+  CREATED_AT: string;
+}
+
+interface GeneratedContent {
+  content?: string;
+  podcastUrl?: string;
+  sources?: Array<{ title: string; url: string }>;
+}
+
+interface Flashcard {
+  front: string;
+  back: string;
+  source: string;
+}
+
 // Simplified floating animation - uses CSS transform for GPU acceleration
 const floatKeyframes = `
   @keyframes cluster-float {
@@ -18,6 +53,73 @@ const getFloatAnimation = (index: number) => {
   const duration = 8 + (index % 4);
   return `cluster-float ${duration}s ease-in-out infinite`;
 };
+
+const CLUSTER_POSITIONS_KEY = 'learnspace_cluster_positions';
+
+const MIN_DIST_PCT = 16; // min % distance between cluster centers so they don't overlap
+const CENTER_SPREAD = 10; // max % from center (50) — clusters spawn in center of grid
+
+function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** Spawn in center of grid with small random offset; avoid overlapping existing positions */
+function getCenterBiasedNonOverlapping(usedPositions: { x: number; y: number }[]): { x: number; y: number } {
+  const maxTries = 50;
+  for (let t = 0; t < maxTries; t++) {
+    // Spawn near center: small radius + random angle
+    const r = CENTER_SPREAD * Math.sqrt(Math.random());
+    const angle = Math.random() * 2 * Math.PI;
+    const x = 50 + r * Math.cos(angle);
+    const y = 50 + r * Math.sin(angle);
+    const pos = { x, y };
+    const tooClose = usedPositions.some((p) => dist(pos, p) < MIN_DIST_PCT);
+    if (!tooClose) return pos;
+  }
+  // Fallback: ring around center
+  const n = usedPositions.length;
+  const fallbackR = MIN_DIST_PCT + (n % 3) * 10;
+  const fallbackA = (n * 1.2) % (2 * Math.PI);
+  return {
+    x: 50 + fallbackR * Math.cos(fallbackA),
+    y: 50 + fallbackR * Math.sin(fallbackA),
+  };
+}
+
+// User preferences from onboarding
+interface UserContentPreferences {
+  learningStyle: 'verbal' | 'audio';
+  textFormat?: 'bullet' | 'paragraph' | 'mixed';
+  jargonLevel?: 'none' | 'some' | 'technical';
+  interests?: string[];
+  customInterests?: string;
+  podcastLength?: 'short' | 'medium' | 'long';
+  podcastStyle?: 'conversational' | 'educational' | 'storytelling';
+  background?: 'student' | 'professional' | 'hobbyist' | 'researcher' | 'other';
+  backgroundDetails?: string;
+  extraNotes?: string;
+}
+
+// Backend cluster structure
+interface BackendCluster {
+  ID: number;
+  NAME: string;
+  DESCRIPTION: string;
+  IR_IDS: string; // JSON array
+  CREATED_AT: string;
+}
+
+interface GeneratedContent {
+  content?: string;
+  podcastUrl?: string;
+  sources?: Array<{ title: string; url: string }>;
+}
+
+interface Flashcard {
+  front: string;
+  back: string;
+  source: string;
+}
 
 interface ClusterLink {
   id: string;
@@ -37,111 +139,12 @@ interface Cluster {
   position: { x: number; y: number };
   isRead: boolean;
   isHidden: boolean;
+  generatedContent?: GeneratedContent;
+  flashcards?: Flashcard[];
 }
 
-// Initial cluster data with relationships
-const initialClusters: Cluster[] = [
-  {
-    id: "1",
-    name: "Machine Learning Fundamentals",
-    color: "#e07850",
-    size: 5,
-    position: { x: 45, y: 35 },
-    isRead: false,
-    isHidden: false,
-    links: [
-      { id: "1a", title: "Introduction to Neural Networks", url: "https://example.com/nn-intro", source: "Medium" },
-      { id: "1b", title: "Understanding Gradient Descent", url: "https://example.com/gradient", source: "Towards Data Science" },
-      { id: "1c", title: "A Beginner's Guide to TensorFlow", url: "https://example.com/tf-guide", source: "TensorFlow Blog" },
-      { id: "1d", title: "Deep Learning vs Machine Learning", url: "https://example.com/dl-vs-ml", source: "Analytics Vidhya" },
-      { id: "1e", title: "Practical ML with Python", url: "https://example.com/ml-python", source: "Real Python" },
-    ],
-    summary: "A comprehensive collection exploring the foundations of machine learning, from basic neural network architectures to practical implementation with Python frameworks. Covers gradient descent optimization, the distinction between deep learning and traditional ML approaches.",
-    concepts: ["Neural Networks", "Gradient Descent", "TensorFlow", "Deep Learning", "Supervised Learning"],
-  },
-  {
-    id: "2",
-    name: "Web Performance",
-    color: "#6b8e7d",
-    size: 3,
-    position: { x: 60, y: 55 },
-    isRead: true,
-    isHidden: false,
-    links: [
-      { id: "2a", title: "Core Web Vitals Explained", url: "https://example.com/cwv", source: "web.dev" },
-      { id: "2b", title: "Lazy Loading Images", url: "https://example.com/lazy-load", source: "CSS-Tricks" },
-      { id: "2c", title: "Optimizing JavaScript Bundles", url: "https://example.com/js-bundles", source: "Smashing Magazine" },
-    ],
-    summary: "Resources focused on improving web application performance, including Google's Core Web Vitals metrics, image optimization strategies, and JavaScript bundle size reduction techniques.",
-    concepts: ["Core Web Vitals", "Lazy Loading", "Bundle Optimization", "LCP", "FID"],
-  },
-  {
-    id: "3",
-    name: "Design Systems",
-    color: "#7d6b8e",
-    size: 4,
-    position: { x: 35, y: 60 },
-    isRead: false,
-    isHidden: false,
-    links: [
-      { id: "3a", title: "Building a Design System from Scratch", url: "https://example.com/design-system", source: "Figma Blog" },
-      { id: "3b", title: "Component Library Best Practices", url: "https://example.com/component-lib", source: "Storybook" },
-      { id: "3c", title: "Design Tokens Explained", url: "https://example.com/tokens", source: "Adobe Spectrum" },
-      { id: "3d", title: "Accessibility in Design Systems", url: "https://example.com/a11y-design", source: "Inclusive Components" },
-    ],
-    summary: "A deep dive into creating and maintaining design systems, covering component architecture, design tokens for consistent theming, and ensuring accessibility throughout the system.",
-    concepts: ["Component Architecture", "Design Tokens", "Accessibility", "Documentation", "Figma"],
-  },
-  {
-    id: "4",
-    name: "TypeScript Patterns",
-    color: "#5a7d9a",
-    size: 2,
-    position: { x: 55, y: 25 },
-    isRead: false,
-    isHidden: false,
-    links: [
-      { id: "4a", title: "Advanced TypeScript Types", url: "https://example.com/ts-types", source: "TypeScript Handbook" },
-      { id: "4b", title: "Utility Types Deep Dive", url: "https://example.com/utility-types", source: "Matt Pocock" },
-    ],
-    summary: "Exploration of advanced TypeScript patterns and utility types for building type-safe applications with better developer experience.",
-    concepts: ["Generics", "Utility Types", "Type Guards", "Conditional Types"],
-  },
-  {
-    id: "5",
-    name: "Startup Strategy",
-    color: "#9a7d5a",
-    size: 3,
-    position: { x: 25, y: 40 },
-    isRead: false,
-    isHidden: false,
-    links: [
-      { id: "5a", title: "Product-Market Fit Guide", url: "https://example.com/pmf", source: "Y Combinator" },
-      { id: "5b", title: "Lean Startup Methodology", url: "https://example.com/lean", source: "Eric Ries" },
-      { id: "5c", title: "Building MVPs That Matter", url: "https://example.com/mvp", source: "First Round Review" },
-    ],
-    summary: "Essential readings on startup strategy, focusing on achieving product-market fit, lean development practices, and building meaningful minimum viable products.",
-    concepts: ["Product-Market Fit", "MVP", "Lean Startup", "Customer Development"],
-  },
-  {
-    id: "6",
-    name: "Cognitive Science",
-    color: "#8e6b7d",
-    size: 2,
-    position: { x: 50, y: 70 },
-    isRead: false,
-    isHidden: false,
-    links: [
-      { id: "6a", title: "How Memory Works", url: "https://example.com/memory", source: "Scientific American" },
-      { id: "6b", title: "Spaced Repetition Systems", url: "https://example.com/srs", source: "Gwern" },
-    ],
-    summary: "Fascinating insights into how human memory and learning work, with practical applications like spaced repetition for better retention.",
-    concepts: ["Memory", "Spaced Repetition", "Learning", "Cognitive Load"],
-  },
-];
-
 export default function Dashboard() {
-  const [clusters, setClusters] = useState<Cluster[]>(initialClusters);
+  const [clusters, setClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [hoveredCluster, setHoveredCluster] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -149,9 +152,306 @@ export default function Dashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const [draggedCluster, setDraggedCluster] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [preferences, setPreferences] = useState<UserContentPreferences | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentStatus, setContentStatus] = useState<string>('');
+  const [flashcardLoading, setFlashcardLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const zoomContentRef = useRef<HTMLDivElement>(null); // inner scaled world for drag coords
   const hasDraggedRef = useRef(false);
   const dragStartPosRef = useRef<{x: number; y: number} | null>(null);
+
+  // Load preferences from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('learnspace_preferences');
+    if (saved) {
+      try {
+        setPreferences(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse preferences:', e);
+      }
+    }
+  }, []);
+
+  // Load clusters from backend
+  const loadClusters = useCallback(async () => {
+    try {
+      // Fetch clusters and all IRs in parallel
+      const [clustersResponse, irsResponse] = await Promise.all([
+        fetch('/api/clusters'),
+        fetch('/api/ir/extract?all=true'),
+      ]);
+      
+      if (!clustersResponse.ok) throw new Error('Failed to fetch clusters');
+      const clustersData = await clustersResponse.json();
+      
+      // API returns { clusters: [...] }
+      const backendClusters = clustersData.clusters || [];
+      
+      if (!Array.isArray(backendClusters) || backendClusters.length === 0) {
+        setClusters([]);
+        return;
+      }
+      
+      // Get all IRs for link resolution
+      let allIRs: any[] = [];
+      if (irsResponse.ok) {
+        const irsData = await irsResponse.json();
+        allIRs = irsData.irs || [];
+      }
+      
+      // Load saved positions (refresh does not reset positions; only add/remove clusters)
+      let savedPositions: Record<string, { x: number; y: number }> = {};
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem(CLUSTER_POSITIONS_KEY) : null;
+        if (raw) savedPositions = JSON.parse(raw);
+      } catch { /* ignore */ }
+
+      // Transform backend clusters to frontend format
+      const transformedClusters: Cluster[] = backendClusters.map((bc: any, index: number) => {
+        // Parse IR IDs - handle both string and array formats
+        const irIds = Array.isArray(bc.irIds) ? bc.irIds : 
+                      (typeof bc.irIds === 'string' ? JSON.parse(bc.irIds || '[]') :
+                      (bc.IR_IDS ? JSON.parse(bc.IR_IDS || '[]') : []));
+        
+        // Build links from IRs that belong to this cluster
+        const links: ClusterLink[] = [];
+        irIds.forEach((irId: number | string) => {
+          const ir = allIRs.find((i: any) => 
+            i.id === irId || i.ID === irId || i.id === String(irId) || i.ID === String(irId)
+          );
+          if (ir) {
+            const url = ir.sourceUrl || ir.SOURCE_URL || ir.url || '';
+            let hostname = 'Unknown';
+            try {
+              if (url) hostname = new URL(url).hostname;
+            } catch { /* ignore invalid URLs */ }
+            
+            links.push({
+              id: `ir-${ir.id || ir.ID}`,
+              title: ir.summary || ir.SUMMARY || ir.sourceTitle || ir.SOURCE_TITLE || url || 'Untitled',
+              url,
+              source: hostname,
+            });
+          }
+        });
+
+        const clusterId = (bc.id || bc.ID || index).toString();
+        // Saved position used as-is; others get a placeholder and are assigned later (center-biased, non-overlapping)
+        const position = savedPositions[clusterId] ?? { x: 50, y: 50 };
+
+        // Generate a color based on index
+        const colors = ['#e07850', '#6b8e7d', '#7d6b8e', '#5a7d9a', '#9a7d5a', '#8e6b7d'];
+        
+        // Parse description for summary and concepts (API returns lowercase props)
+        const description = bc.description || bc.DESCRIPTION || '';
+        const summaryMatch = description.match(/Summary: (.+?)(?:\n|$)/);
+        const conceptsMatch = description.match(/Key Topics: (.+?)(?:\n|$)/);
+        
+        // Get aggregated topics if available
+        const aggregatedTopics = Array.isArray(bc.aggregatedTopics) ? bc.aggregatedTopics : [];
+        
+        return {
+          id: clusterId,
+          name: bc.name || bc.NAME || 'Untitled Cluster',
+          color: colors[index % colors.length],
+          links,
+          summary: summaryMatch ? summaryMatch[1] : description.split('\n')[0] || 'No description available',
+          concepts: aggregatedTopics.length > 0 ? aggregatedTopics.slice(0, 5) : 
+                    (conceptsMatch ? conceptsMatch[1].split(', ').slice(0, 5) : []),
+          size: links.length,
+          position,
+          isRead: false,
+          isHidden: false,
+        };
+      });
+
+      // Do not show clusters with 0 links (empty clusters)
+      const filtered = transformedClusters.filter((c) => c.links.length > 0);
+
+      // Assign center-biased, non-overlapping positions for clusters without saved position
+      const usedPositions: { x: number; y: number }[] = filtered
+        .filter((c) => savedPositions[c.id])
+        .map((c) => c.position);
+      const clustersToShow = filtered.map((c) => {
+        if (savedPositions[c.id]) return c;
+        const pos = getCenterBiasedNonOverlapping(usedPositions);
+        usedPositions.push(pos);
+        return { ...c, position: pos };
+      });
+
+      // Prune saved positions to only existing cluster ids (remove deleted clusters)
+      const pruned: Record<string, { x: number; y: number }> = {};
+      clustersToShow.forEach((c) => {
+        if (savedPositions[c.id]) pruned[c.id] = savedPositions[c.id];
+      });
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(CLUSTER_POSITIONS_KEY, JSON.stringify(pruned));
+        } catch { /* ignore */ }
+      }
+      
+      setClusters(clustersToShow);
+    } catch (error) {
+      console.error('Error loading clusters:', error);
+    }
+  }, []);
+
+  // Load clusters on mount
+  useEffect(() => {
+    loadClusters();
+  }, [loadClusters]);
+
+  // Refresh: re-cluster based on all existing IRs (IRs are extracted when bookmarks are added)
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      console.log('Refreshing clusters...');
+      
+      // Generate/update clusters (incremental: adds new IRs to existing clusters or creates new ones)
+      const clustersRes = await fetch('/api/clusters/generate', {
+        method: 'POST',
+      });
+      
+      if (!clustersRes.ok) {
+        const errorData = await clustersRes.json();
+        throw new Error(errorData.error || 'Failed to generate clusters');
+      }
+
+      const result = await clustersRes.json();
+      console.log('Cluster generation result:', result);
+
+      // Reload clusters to show updates
+      await loadClusters();
+      
+      if (result.mode === 'initial') {
+        alert(`Refresh complete! Created ${result.clustersGenerated} initial clusters.`);
+      } else if (result.mode === 'incremental') {
+        if (result.assignmentsApplied === 0 && result.newClustersCreated === 0) {
+          alert('All links already organized in clusters. Add new bookmarks to see updates!');
+        } else {
+          alert(`Refresh complete! Added ${result.assignmentsApplied} links to existing clusters and created ${result.newClustersCreated} new clusters.`);
+        }
+      }
+    } catch (error) {
+      console.error('Refresh error:', error);
+      alert(`Refresh failed: ${(error as Error).message}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Generate content for a cluster based on user preferences
+  const handleGenerateContent = async (clusterId: string) => {
+    if (!preferences) {
+      alert('Please complete the onboarding survey first!');
+      return;
+    }
+
+    setContentLoading(true);
+    setContentStatus('');
+
+    try {
+      if (preferences.learningStyle === 'audio') {
+        // Generate podcast
+        const params = new URLSearchParams({
+          clusterId,
+          preferences: JSON.stringify(preferences),
+        });
+        
+        const eventSource = new EventSource(`/api/podcast/generate?${params}`);
+        
+        eventSource.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          
+          if (data.status) {
+            setContentStatus(data.status);
+          }
+          
+          if (data.done) {
+            // Update cluster with podcast URL and sources
+            updateCluster(clusterId, {
+              generatedContent: {
+                podcastUrl: data.url,
+                sources: data.sources || [],
+              },
+            });
+            setContentStatus('Podcast ready!');
+            eventSource.close();
+            setContentLoading(false);
+          }
+          
+          if (data.error) {
+            console.error('Podcast generation error:', data.error);
+            setContentStatus(`Error: ${data.error}`);
+            eventSource.close();
+            setContentLoading(false);
+          }
+        };
+        
+        eventSource.onerror = () => {
+          eventSource.close();
+          setContentStatus('Connection error');
+          setContentLoading(false);
+        };
+      } else {
+        // Generate text content
+        const response = await fetch('/api/content/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            preferences,
+            source: { clusterId },
+          }),
+        });
+
+        if (!response.ok) throw new Error('Failed to generate content');
+        
+        const data = await response.json();
+        
+        // Update cluster with generated content
+        updateCluster(clusterId, {
+          generatedContent: {
+            content: data.content,
+            sources: data.sources || [],
+          },
+        });
+        
+        setContentLoading(false);
+      }
+    } catch (error) {
+      console.error('Content generation error:', error);
+      alert('Failed to generate content. See console for details.');
+      setContentLoading(false);
+    }
+  };
+
+  // Generate flashcards for a cluster
+  const handleGenerateFlashcards = async (clusterId: string) => {
+    setFlashcardLoading(true);
+    try {
+      const response = await fetch('/api/flashcards/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clusterId }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate flashcards');
+      
+      const flashcards: Flashcard[] = await response.json();
+      
+      // Update cluster with flashcards
+      updateCluster(clusterId, { flashcards });
+      
+      alert(`Generated ${flashcards.length} flashcards!`);
+    } catch (error) {
+      console.error('Flashcard generation error:', error);
+      alert('Failed to generate flashcards. See console for details.');
+    } finally {
+      setFlashcardLoading(false);
+    }
+  };
 
   const handleClusterClick = (cluster: Cluster) => {
     // Only open sidebar if we didn't drag
@@ -220,6 +520,14 @@ export default function Dashboard() {
     const clampedY = Math.max(0, Math.min(100, y));
     
     updateCluster(draggedCluster, { position: { x: clampedX, y: clampedY } });
+
+    // Persist position so refresh does not reset it
+    try {
+      const raw = localStorage.getItem(CLUSTER_POSITIONS_KEY);
+      const saved: Record<string, { x: number; y: number }> = raw ? JSON.parse(raw) : {};
+      saved[draggedCluster] = { x: clampedX, y: clampedY };
+      localStorage.setItem(CLUSTER_POSITIONS_KEY, JSON.stringify(saved));
+    } catch { /* ignore */ }
   }, [isDragging, draggedCluster, updateCluster]);
 
   // Handle drag end
@@ -346,13 +654,18 @@ export default function Dashboard() {
         {/* Bottom Actions */}
         <div className="p-4 border-t border-neutral-300/50 space-y-2">
           {/* Refresh Button - Orange */}
-          <button className="w-full px-4 py-2 text-sm text-white font-[family-name:var(--font-body)] transition-colors duration-200 flex items-center justify-center gap-2 rounded-sm hover:brightness-110" style={{ backgroundColor: "#e07850" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="w-full px-4 py-2 text-sm text-white font-[family-name:var(--font-body)] transition-colors duration-200 flex items-center justify-center gap-2 rounded-sm hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" 
+            style={{ backgroundColor: "#e07850" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isRefreshing ? 'animate-spin' : ''}>
               <polyline points="23 4 23 10 17 10" />
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            Refresh
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           
           {/* Add Link Button */}
@@ -463,16 +776,10 @@ export default function Dashboard() {
           }}
         />
 
-        {/* Cluster Visualization Area */}
-        <div 
+        {/* Cluster Visualization Area — camera-style zoom from center */}
+        <div
           ref={containerRef}
-          className="absolute inset-0 overflow-visible"
-          style={{ 
-            width: `${100 / zoom}%`,
-            height: `${100 / zoom}%`,
-            transform: `scale(${zoom})`, 
-            transformOrigin: 'top left',
-          }}
+          className="absolute inset-0 overflow-visible flex items-center justify-center"
           onClick={(e) => {
             // Close sidebar when clicking on empty space (not on clusters)
             if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-cluster]') === null) {
@@ -480,6 +787,17 @@ export default function Dashboard() {
             }
           }}
         >
+          <div
+            ref={zoomContentRef}
+            className="relative"
+            style={{
+              width: `${100 / zoom}%`,
+              height: `${100 / zoom}%`,
+              transform: `scale(${zoom})`,
+              transformOrigin: 'center center',
+              transition: 'transform 0.2s ease-out',
+            }}
+          >
           {/* Background gradient */}
           <div 
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120vh] h-[120vh] rounded-full pointer-events-none"
@@ -577,6 +895,7 @@ export default function Dashboard() {
               </div>
             );
           })}
+          </div>
         </div>
       </main>
 
@@ -669,6 +988,54 @@ export default function Dashboard() {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Generated Content Section */}
+              {selectedCluster.generatedContent && (
+                <div>
+                  <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3 font-[family-name:var(--font-body)]">
+                    Generated Content
+                  </h3>
+                  
+                  {/* Text Content */}
+                  {selectedCluster.generatedContent.content && (
+                    <div className="prose prose-sm max-w-none text-neutral-700 font-[family-name:var(--font-body)]">
+                      <div dangerouslySetInnerHTML={{ __html: selectedCluster.generatedContent.content.replace(/\n/g, '<br />') }} />
+                    </div>
+                  )}
+                  
+                  {/* Podcast Audio Player */}
+                  {selectedCluster.generatedContent.podcastUrl && (
+                    <div className="bg-white/50 rounded-sm p-4">
+                      <audio controls className="w-full">
+                        <source src={selectedCluster.generatedContent.podcastUrl} type="audio/mpeg" />
+                        Your browser does not support the audio element.
+                      </audio>
+                    </div>
+                  )}
+                  
+                  {/* Sources/References */}
+                  {selectedCluster.generatedContent.sources && selectedCluster.generatedContent.sources.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2 font-[family-name:var(--font-body)]">
+                        References
+                      </h4>
+                      <div className="space-y-1">
+                        {selectedCluster.generatedContent.sources.map((source, idx) => (
+                          <a
+                            key={idx}
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block text-xs text-[#e07850] hover:underline font-[family-name:var(--font-body)]"
+                          >
+                            [{idx + 1}] {source.title}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Summary */}
               <div>
                 <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3 font-[family-name:var(--font-body)]">
@@ -724,16 +1091,59 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
+
+              {/* Flashcards */}
+              {selectedCluster.flashcards && selectedCluster.flashcards.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3 font-[family-name:var(--font-body)]">
+                    Flashcards ({selectedCluster.flashcards.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {selectedCluster.flashcards.map((card, idx) => (
+                      <div key={idx} className="p-3 bg-white/50 rounded-sm">
+                        <p className="text-sm font-semibold text-neutral-800 font-[family-name:var(--font-body)] mb-1">
+                          Q: {card.front}
+                        </p>
+                        <p className="text-sm text-neutral-600 font-[family-name:var(--font-body)]">
+                          A: {card.back}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* View Content Button */}
-            <div className="p-6 border-t border-neutral-300/50">
-              <button 
-                className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110"
-                style={{ backgroundColor: selectedCluster.color }}
-              >
-                View Digest
-              </button>
+            <div className="p-6 border-t border-neutral-300/50 space-y-2">
+              {!selectedCluster.generatedContent && (
+                <>
+                  <button 
+                    onClick={() => handleGenerateContent(selectedCluster.id)}
+                    disabled={contentLoading || !preferences}
+                    className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: selectedCluster.color }}
+                  >
+                    {contentLoading ? contentStatus || 'Generating...' : 'Generate Content'}
+                  </button>
+                  {!preferences && (
+                    <p className="text-xs text-neutral-500 text-center font-[family-name:var(--font-body)]">
+                      Complete <Link href="/onboarding" className="text-[#e07850] hover:underline">onboarding</Link> to generate content
+                    </p>
+                  )}
+                </>
+              )}
+              
+              {selectedCluster.generatedContent && !selectedCluster.flashcards && (
+                <button 
+                  onClick={() => handleGenerateFlashcards(selectedCluster.id)}
+                  disabled={flashcardLoading}
+                  className="w-full px-6 py-3 text-white text-sm tracking-[0.1em] uppercase font-[family-name:var(--font-body)] transition-all duration-300 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: selectedCluster.color }}
+                >
+                  {flashcardLoading ? 'Generating Flashcards...' : 'Generate Flashcards'}
+                </button>
+              )}
             </div>
           </div>
         )}

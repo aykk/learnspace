@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { IRRecord } from '../db';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'] as const;
 
 export interface ClusterResult {
   id: string;
@@ -16,6 +16,20 @@ export interface ClusterResult {
   aggregatedTopics: string[];
   memberCount: number;
   avgDifficulty: string;
+}
+
+/** Existing cluster summary for incremental assignment */
+export interface ExistingClusterSummary {
+  id: string;
+  name: string;
+  description: string;
+  irIds: string[];
+}
+
+/** Result of assigning unassigned IRs: which cluster(s) each IR joins, and any new clusters */
+export interface IncrementalClusterResult {
+  assignments: { irId: string; addToClusterIds: string[] }[];
+  newClusters: ClusterResult[];
 }
 
 /**
@@ -43,32 +57,42 @@ export async function generateClusters(irs: IRRecord[]): Promise<ClusterResult[]
   console.log(`🧩 [Clustering] Generating clusters for ${irs.length} IRs using Gemini`);
 
   const prompt = buildClusteringPrompt(irs);
-  
-  const response = await fetch(GEMINI_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        temperature: 0.3, // Lower temperature for more consistent grouping
-        maxOutputTokens: 8192, // Enough for many clusters without truncation
-      },
-    }),
-  });
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+  };
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('Gemini clustering error:', error);
-    throw new Error(`Gemini API error: ${response.status} ${error}`);
+  let text: string | null = null;
+  let lastError = '';
+
+  for (const model of MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+      if (text) break;
+    } else {
+      lastError = await response.text();
+      if (response.status === 429 || lastError.includes('quota') || lastError.includes('RESOURCE_EXHAUSTED')) {
+        const retryMatch = lastError.match(/retry in (\d+(?:\.\d+)?)s/i);
+        const waitMs = retryMatch ? Math.ceil(parseFloat(retryMatch[1]) * 1000) : 25000;
+        console.warn(`[Clustering] Quota exceeded for ${model}, retrying in ${Math.min(waitMs, 30000) / 1000}s...`);
+        await new Promise((r) => setTimeout(r, Math.min(waitMs, 30000)));
+        continue;
+      }
+      console.error('Gemini clustering error:', lastError);
+      throw new Error(`Gemini API error: ${response.status} ${lastError}`);
+    }
   }
 
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
   if (!text) {
-    throw new Error('No response from Gemini');
+    throw new Error(lastError || 'All Gemini models exhausted (quota). Try again in a few minutes.');
   }
 
   console.log('🧩 [Clustering] Received response from Gemini, parsing...');
@@ -78,6 +102,169 @@ export async function generateClusters(irs: IRRecord[]): Promise<ClusterResult[]
   console.log(`🧩 [Clustering] Generated ${clusters.length} clusters`);
   
   return clusters;
+}
+
+/**
+ * Incremental clustering: assign unassigned IRs to existing clusters and/or create new clusters.
+ * Never deletes or removes IRs from existing clusters; only adds.
+ */
+export async function assignUnassignedIRsToClusters(
+  existingClusters: ExistingClusterSummary[],
+  unassignedIRs: IRRecord[]
+): Promise<IncrementalClusterResult> {
+  if (unassignedIRs.length === 0) {
+    return { assignments: [], newClusters: [] };
+  }
+
+  console.log(`🧩 [Clustering] Assigning ${unassignedIRs.length} unassigned IRs to ${existingClusters.length} existing clusters (incremental)`);
+
+  const prompt = buildIncrementalClusteringPrompt(existingClusters, unassignedIRs);
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+  };
+
+  let text: string | null = null;
+  let lastError = '';
+
+  for (const model of MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+      if (text) break;
+    } else {
+      lastError = await response.text();
+      if (response.status === 429 || lastError.includes('quota') || lastError.includes('RESOURCE_EXHAUSTED')) {
+        const retryMatch = lastError.match(/retry in (\d+(?:\.\d+)?)s/i);
+        const waitMs = retryMatch ? Math.ceil(parseFloat(retryMatch[1]) * 1000) : 25000;
+        console.warn(`[Clustering] Quota exceeded for ${model}, retrying in ${Math.min(waitMs, 30000) / 1000}s...`);
+        await new Promise((r) => setTimeout(r, Math.min(waitMs, 30000)));
+        continue;
+      }
+      console.error('Gemini clustering error:', lastError);
+      throw new Error(`Gemini API error: ${response.status} ${lastError}`);
+    }
+  }
+
+  if (!text) {
+    throw new Error(lastError || 'All Gemini models exhausted (quota). Try again in a few minutes.');
+  }
+
+  console.log('🧩 [Clustering] Parsing incremental assignment response...');
+  return parseIncrementalClusterResponse(text, unassignedIRs);
+}
+
+/**
+ * Build prompt for incremental assignment: existing clusters + unassigned IRs
+ */
+function buildIncrementalClusteringPrompt(
+  existingClusters: ExistingClusterSummary[],
+  unassignedIRs: IRRecord[]
+): string {
+  const existingBlock = existingClusters.map((c) => {
+    return `Cluster ID: ${c.id}\nName: ${c.name}\nDescription: ${c.description}\nCurrent IRs: ${c.irIds.join(', ')} (${c.irIds.length} members)`;
+  }).join('\n\n');
+
+  const unassignedBlock = unassignedIRs.map((ir, idx) => {
+    const topics = parseJsonField(ir.KEY_TOPICS);
+    const concepts = parseJsonField(ir.CONCEPTS);
+    const conceptNames = concepts.map((c: any) => c.name).join(', ');
+    return `
+Unassigned IR ${idx + 1}:
+- ID: ${ir.ID}
+- Title: ${ir.SOURCE_TITLE || 'Untitled'}
+- Summary: ${ir.SUMMARY}
+- Topics: ${topics.join(', ')}
+- Key Concepts: ${conceptNames}
+- Difficulty: ${ir.DIFFICULTY}
+- Type: ${ir.CONTENT_TYPE}
+`.trim();
+  }).join('\n\n');
+
+  return `You are a learning content clustering expert. We have EXISTING clusters and NEW content (unassigned IRs) that must be assigned.
+
+EXISTING CLUSTERS (do not remove any IRs from these; we only ADD):
+${existingBlock}
+
+UNASSIGNED IRs (new content to assign):
+${unassignedBlock}
+
+Your task:
+1. For each unassigned IR, assign it to one or more EXISTING clusters whose theme it meaningfully fits (use the cluster ID). An IR can be in multiple clusters (e.g. up to 5) if it touches multiple themes.
+2. If an unassigned IR does not fit any existing cluster thematically, create a NEW cluster for it (and optionally group with other unassigned IRs that share the same theme).
+3. Never suggest removing an IR from an existing cluster. Only add.
+
+Return your response as a JSON object with this exact structure:
+\`\`\`json
+{
+  "assignments": [
+    { "irId": "<ir-id>", "addToClusterIds": ["<existing-cluster-id>", "<existing-cluster-id>"] }
+  ],
+  "newClusters": [
+    {
+      "name": "New cluster name",
+      "description": "Brief description",
+      "irIds": ["<ir-id>", "<ir-id>"],
+      "aggregatedTopics": ["topic1", "topic2"],
+      "avgDifficulty": "beginner|intermediate|advanced"
+    }
+  ]
+}
+\`\`\`
+
+Rules:
+- Every unassigned IR must appear in either assignments (addToClusterIds non-empty) or in exactly one newClusters entry (or both: can be added to existing AND appear in a new cluster - but typically either/or).
+- addToClusterIds must only contain IDs from the EXISTING CLUSTERS list above.
+- newClusters can only reference unassigned IR IDs.
+- An unassigned IR may be assigned to 0 existing clusters and only appear in a new cluster if it does not fit existing themes.
+- Cluster size will be updated automatically; we only send additions.
+
+Return ONLY the JSON object, no additional text.`;
+}
+
+/**
+ * Parse incremental clustering response from Gemini
+ */
+function parseIncrementalClusterResponse(
+  text: string,
+  unassignedIRs: IRRecord[]
+): IncrementalClusterResult {
+  try {
+    let jsonText = text.trim();
+    if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
+    }
+    const startIdx = jsonText.indexOf('{');
+    const endIdx = jsonText.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx !== -1) jsonText = jsonText.slice(startIdx, endIdx + 1);
+
+    const parsed = JSON.parse(jsonText) as { assignments?: any[]; newClusters?: any[] };
+    const assignments = Array.isArray(parsed.assignments) ? parsed.assignments : [];
+    const rawNewClusters = Array.isArray(parsed.newClusters) ? parsed.newClusters : [];
+
+    const newClusters: ClusterResult[] = rawNewClusters.map((c: any) => ({
+      id: uuidv4(),
+      name: c.name || 'New Cluster',
+      description: c.description || '',
+      irIds: Array.isArray(c.irIds) ? c.irIds : [],
+      aggregatedTopics: Array.isArray(c.aggregatedTopics) ? c.aggregatedTopics : [],
+      memberCount: Array.isArray(c.irIds) ? c.irIds.length : 0,
+      avgDifficulty: c.avgDifficulty || 'intermediate',
+    }));
+
+    return { assignments, newClusters };
+  } catch (error) {
+    console.error('Failed to parse incremental cluster response:', error);
+    console.error('Raw response:', text);
+    throw new Error(`Failed to parse incremental clustering response: ${(error as Error).message}`);
+  }
 }
 
 /**

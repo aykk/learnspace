@@ -71,10 +71,20 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const bookmarkId = searchParams.get('bookmarkId');
+    const all = searchParams.get('all');
+
+    // If 'all' parameter is set, return all IRs
+    if (all === 'true') {
+      const { getAllIRs } = await import('@/lib/db');
+      const allIRs = await getAllIRs();
+      return NextResponse.json({
+        irs: allIRs.map(parseIRRecord),
+      });
+    }
 
     if (!bookmarkId) {
       return NextResponse.json(
-        { error: 'bookmarkId query parameter required' },
+        { error: 'bookmarkId query parameter required (or use ?all=true)' },
         { status: 400 }
       );
     }
